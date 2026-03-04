@@ -10,6 +10,7 @@ class MessageType(str, Enum):
     TEXT = "text"
     IMAGE = "image"
     VIDEO = "video"
+    AUDIO = "audio"
     FILE = "file"
     STICKER = "sticker"
     LOCATION = "location"
@@ -31,8 +32,16 @@ class RawMessage(BaseModel):
     message_type: MessageType
     text: str = ""
     media_url: str | None = None
+    media_content: bytes | None = None
+    media_mime_type: str | None = None
     timestamp: datetime
     reply_token: str = ""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @property
+    def has_media(self) -> bool:
+        return self.media_content is not None and len(self.media_content) > 0
 
     @classmethod
     def from_line_event(cls, event: dict) -> RawMessage | None:

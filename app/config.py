@@ -14,10 +14,15 @@ class Settings(BaseSettings):
     notion_database_id: str = ""        # 主知識庫 Database ID
     notion_digest_database_id: str = ""  # 每日摘要 Database ID
 
-    # AI (Claude)
-    anthropic_api_key: str = ""
-    ai_model: str = "claude-haiku-4-5-20251001"  # 初篩用 Haiku 省成本
-    ai_model_advanced: str = "claude-sonnet-4-5-20250929"  # 複雜內容用 Sonnet
+    # AI (OpenRouter)
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # 模型路由（依內容類型自動選擇最適合的模型）
+    ai_model_text: str = "deepseek/deepseek-v3.2-20251201"
+    ai_model_vision: str = "google/gemini-3.1-flash-lite-preview-20260303"
+    ai_model_audio: str = "google/gemini-3.1-flash-lite-preview-20260303"
+    ai_model_complex: str = "google/gemini-3-pro-preview"
 
     # 處理設定
     aggregation_window_seconds: int = 300  # 訊息聚合視窗（秒）
