@@ -1,0 +1,28 @@
+[project]
+name = "linebot-notion-kb"
+version = "0.1.0"
+description = "LINE Bot 群組訊息 → AI 分類 → Notion 知識庫"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+    "line-bot-sdk>=3.0",
+    "notion-client>=2.0",
+    "anthropic>=0.30",
+    "httpx>=0.25",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "apscheduler>=3.10",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
