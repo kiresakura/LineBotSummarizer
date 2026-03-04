@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     ai_model_audio: str = "google/gemini-3.1-flash-lite-preview-20260303"
     ai_model_complex: str = "google/gemini-3-pro-preview"
 
+    # 管理員通知
+    admin_line_user_id: str = ""
+
     # 處理設定
     aggregation_window_seconds: int = 300  # 訊息聚合視窗（秒）
     min_batch_size: int = 3

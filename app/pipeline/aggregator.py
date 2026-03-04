@@ -8,6 +8,12 @@ from app.models.message import RawMessage
 
 logger = logging.getLogger(__name__)
 
+IMPORTANCE_LABEL = {
+    "high": "🔴 高",
+    "medium": "🟡 中",
+    "low": "🟢 低",
+}
+
 
 class MessageAggregator:
     """
@@ -78,7 +84,9 @@ class MessageAggregator:
         asyncio.create_task(self._classify_batch(group_id, batch))
 
     async def _classify_batch(self, group_id: str, batch: list[RawMessage]):
-        """呼叫 AI 分類器處理一批訊息"""
+        """呼叫 AI 分類器處理一批訊息，完成後回覆群組"""
+        from app.services.line_notify import send_to_group, notify_admin
+
         try:
             from app.pipeline.classifier import MessageClassifier
             classifier = MessageClassifier()
@@ -88,12 +96,30 @@ class MessageAggregator:
                 from app.pipeline.writer import NotionWriter
                 writer = NotionWriter()
                 await writer.write(result)
-                logger.info(f"✅ 已寫入 Notion: [{result.category}] {result.summary[:50]}")
+                logger.info(f"已寫入 Notion: [{result.category}] {result.summary[:50]}")
+
+                # 回覆群組摘要
+                importance = IMPORTANCE_LABEL.get(result.importance.value, result.importance.value)
+                tags = " ".join(f"#{t}" for t in result.tags[:5])
+                reply = (
+                    f"📋 訊息摘要\n"
+                    f"分類：{result.category}｜重要性：{importance}\n"
+                    f"\n{result.summary}\n"
+                )
+                if result.action_items:
+                    reply += "\n待辦事項：\n"
+                    for item in result.action_items:
+                        reply += f"  - {item}\n"
+                if tags:
+                    reply += f"\n{tags}"
+
+                await send_to_group(group_id, reply)
             else:
                 logger.debug("訊息被判定為噪音，跳過寫入")
 
         except Exception as e:
             logger.error(f"分類/寫入失敗: {e}", exc_info=True)
+            await notify_admin(f"分類/寫入失敗\n群組: {group_id}\n錯誤: {str(e)[:200]}")
 
     async def flush_all(self):
         """關閉時沖洗所有剩餘訊息"""
