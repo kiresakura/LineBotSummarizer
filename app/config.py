@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     intel_max_items_per_feed: int = 10
     intel_dedup_days: int = 7
 
+    # 關鍵字監控 (Phase 2)
+    intel_keywords: str = ""
+    intel_keywords_lang: str = "zh-TW"
+    intel_keywords_geo: str = "TW"
+    intel_keywords_max_results: int = 10
+    intel_keywords_schedule_hours: int = 4
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
