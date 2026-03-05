@@ -71,6 +71,7 @@ class ClassifiedMessage(BaseModel):
     importance: Importance
     title: str = ""
     summary: str  # 完整知識點內容
+    media_descriptions: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     action_items: list[str] = Field(default_factory=list)
     original_messages: list[RawMessage]
