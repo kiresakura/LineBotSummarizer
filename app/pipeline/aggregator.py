@@ -90,20 +90,14 @@ class MessageAggregator:
                 await writer.write(result)
                 logger.info(f"已寫入 Notion: [{result.category}] {result.summary[:50]}")
 
-                # 回覆群組摘要
+                # 回覆群組：已統整寫入 Notion
                 importance = IMPORTANCE_LABEL.get(result.importance.value, result.importance.value)
                 tags = " ".join(f"#{t}" for t in result.tags[:5])
                 reply = (
-                    f"📋 訊息摘要\n"
+                    f"📥 已統整 {len(batch)} 則訊息寫入 Notion 資料庫\n"
                     f"分類：{result.category}｜重要性：{importance}\n"
-                    f"\n{result.summary}\n"
+                    f"{tags}"
                 )
-                if result.action_items:
-                    reply += "\n待辦事項：\n"
-                    for item in result.action_items:
-                        reply += f"  - {item}\n"
-                if tags:
-                    reply += f"\n{tags}"
 
                 await send_to_group(group_id, reply)
             else:
