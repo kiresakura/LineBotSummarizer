@@ -40,6 +40,14 @@ class Settings(BaseSettings):
         "學習資源", "專案更新", "靈感想法", "其他"
     ]
 
+    # 情報收集
+    intel_enabled: bool = False
+    intel_schedule_hours: int = 6
+    intel_rss_feeds: str = ""
+    intel_notion_database_id: str = ""
+    intel_max_items_per_feed: int = 10
+    intel_dedup_days: int = 7
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

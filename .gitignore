@@ -19,5 +19,8 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Data (SQLite dedup DB)
+data/
+
 # Claude Code
 .claude/

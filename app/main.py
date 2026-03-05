@@ -29,11 +29,24 @@ async def lifespan(app: FastAPI):
     # 啟動聚合器的定時沖洗
     await aggregator.start()
 
+    # 啟動情報收集排程器
+    if settings.intel_enabled:
+        from app.scheduler.intel_scheduler import start_scheduler
+        await start_scheduler()
+        logger.info("   情報收集: 已啟動")
+    else:
+        logger.info("   情報收集: 未啟用 (INTEL_ENABLED=false)")
+
     yield
+
+    # 關閉情報收集排程器
+    if settings.intel_enabled:
+        from app.scheduler.intel_scheduler import stop_scheduler
+        await stop_scheduler()
 
     # 關閉時沖洗剩餘訊息
     await aggregator.flush_all()
-    logger.info("👋 LINE Bot 知識庫助手已關閉")
+    logger.info("LINE Bot 知識庫助手已關閉")
 
 
 app = FastAPI(

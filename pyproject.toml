@@ -15,6 +15,8 @@ dependencies = [
     "apscheduler>=3.10",
     "beautifulsoup4>=4.12",
     "yt-dlp>=2024.0",
+    "feedparser>=6.0",
+    "aiosqlite>=0.20",
 ]
 
 [project.optional-dependencies]
