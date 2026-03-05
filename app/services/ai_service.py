@@ -44,7 +44,7 @@ class AIService:
         self,
         prompt: str,
         model: str | None = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         content_type: ContentType = ContentType.TEXT,
     ) -> str:
         """呼叫 OpenRouter API（純文字模式）"""
@@ -74,7 +74,7 @@ class AIService:
         text_prompt: str,
         media_items: list[dict],
         model: str | None = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         content_type: ContentType = ContentType.IMAGE,
     ) -> str:
         """
