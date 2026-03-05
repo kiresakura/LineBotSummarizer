@@ -8,6 +8,9 @@ from app.models.message import ClassifiedMessage
 
 logger = logging.getLogger(__name__)
 
+# Notion rich_text 單個區塊上限 2000 字元
+NOTION_TEXT_LIMIT = 2000
+
 
 class TokenBucketRateLimiter:
     """令牌桶限流器 — 控制 Notion API 呼叫速率"""
@@ -33,6 +36,16 @@ class TokenBucketRateLimiter:
                 self.tokens -= 1
 
 
+def _split_rich_text(text: str) -> list[dict]:
+    """將長文字拆成多個 rich_text 區塊（每個最多 2000 字元）"""
+    if not text:
+        return [{"text": {"content": ""}}]
+    parts = []
+    for i in range(0, len(text), NOTION_TEXT_LIMIT):
+        parts.append({"text": {"content": text[i:i + NOTION_TEXT_LIMIT]}})
+    return parts
+
+
 class NotionWriter:
     """將分類後的訊息寫入 Notion Database"""
 
@@ -50,7 +63,6 @@ class NotionWriter:
         """寫入一筆分類結果到 Notion"""
         settings = get_settings()
 
-        # 構建 Notion Page 資料
         properties = self._build_properties(classified)
         children = self._build_content_blocks(classified)
 
@@ -72,7 +84,7 @@ class NotionWriter:
             except Exception as e:
                 error_str = str(e)
                 if "429" in error_str or "rate_limited" in error_str:
-                    wait = 2 ** attempt  # 指數退避
+                    wait = 2 ** attempt
                     logger.warning(f"Notion 限流，等待 {wait}s 後重試...")
                     await asyncio.sleep(wait)
                 else:
@@ -82,9 +94,6 @@ class NotionWriter:
 
     def _build_properties(self, classified: ClassifiedMessage) -> dict:
         """構建 Notion Page Properties"""
-        settings = get_settings()
-
-        # 使用 AI 生成的標題，退回到知識點前 100 字
         title = classified.title or classified.summary[:100] or "未命名訊息"
 
         properties = {
@@ -96,6 +105,7 @@ class NotionWriter:
                         "high": "🔴 高",
                         "medium": "🟡 中",
                         "low": "🟢 低",
+                        "noise": "⚪ 噪音",
                     }.get(classified.importance.value, "🟢 低")
                 }
             },
@@ -112,23 +122,21 @@ class NotionWriter:
                 }
             },
             "Summary": {
-                "rich_text": [{"text": {"content": classified.summary[:2000]}}]
+                "rich_text": _split_rich_text(classified.summary)
             },
             "Has Action Items": {
                 "checkbox": len(classified.action_items) > 0
             },
         }
 
-        # URL（如果有的話）
         if classified.urls_found:
             properties["URLs"] = {"url": classified.urls_found[0]}
 
         return properties
 
     def _split_text_blocks(self, text: str, block_type: str = "paragraph") -> list:
-        """將長文字拆分為多個 Notion block（每個 block 上限 2000 字元）"""
+        """將長文字拆分為多個 Notion block（每個 block 上限 2000 字元，按段落保持語意完整）"""
         blocks = []
-        # 按段落分割，盡量保持語意完整
         paragraphs = text.split("\n")
         current_chunk = ""
 
@@ -158,10 +166,10 @@ class NotionWriter:
         return blocks
 
     def _build_content_blocks(self, classified: ClassifiedMessage) -> list:
-        """構建 Notion Page 內容區塊"""
+        """構建 Notion Page 內容區塊 — 最大化保留所有資訊"""
         blocks = []
 
-        # 知識點整理區
+        # === 知識點整理區 ===
         blocks.append({
             "object": "block",
             "type": "heading_2",
@@ -169,10 +177,28 @@ class NotionWriter:
                 "rich_text": [{"text": {"content": "📚 知識點整理"}}]
             }
         })
-        # 拆分長內容為多個 block
         blocks.extend(self._split_text_blocks(classified.summary))
 
-        # 待辦事項
+        # === 媒體內容提取區 ===
+        if classified.media_descriptions:
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"text": {"content": "🖼 媒體內容提取"}}]
+                }
+            })
+            for idx, desc in enumerate(classified.media_descriptions, 1):
+                blocks.append({
+                    "object": "block",
+                    "type": "heading_3",
+                    "heading_3": {
+                        "rich_text": [{"text": {"content": f"媒體 {idx}"}}]
+                    }
+                })
+                blocks.extend(self._split_text_blocks(desc))
+
+        # === 待辦事項 ===
         if classified.action_items:
             blocks.append({
                 "object": "block",
@@ -186,12 +212,28 @@ class NotionWriter:
                     "object": "block",
                     "type": "to_do",
                     "to_do": {
-                        "rich_text": [{"text": {"content": item}}],
+                        "rich_text": _split_rich_text(item),
                         "checked": False,
                     }
                 })
 
-        # 原始訊息（摺疊）
+        # === 相關連結 ===
+        if classified.urls_found:
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"text": {"content": "🔗 相關連結"}}]
+                }
+            })
+            for url in classified.urls_found:
+                blocks.append({
+                    "object": "block",
+                    "type": "bookmark",
+                    "bookmark": {"url": url}
+                })
+
+        # === 原始訊息（完整保留，不設上限）===
         blocks.append({
             "object": "block",
             "type": "heading_2",
@@ -200,20 +242,31 @@ class NotionWriter:
             }
         })
 
-        for msg in classified.original_messages[:20]:  # 最多 20 條
+        for msg in classified.original_messages:
+            time_str = msg.timestamp.strftime("%H:%M")
+            sender = msg.user_name or msg.user_id[:8]
             if msg.text:
-                time_str = msg.timestamp.strftime("%H:%M")
-                sender = msg.user_name or msg.user_id[:8]
-                blocks.append({
-                    "object": "block",
-                    "type": "quote",
-                    "quote": {
-                        "rich_text": [{
-                            "text": {
-                                "content": f"[{time_str}] {sender}: {msg.text[:2000]}"
-                            }
-                        }]
-                    }
-                })
+                content = f"[{time_str}] {sender}: {msg.text}"
+            elif msg.message_type.value == "image":
+                content = f"[{time_str}] {sender}: [圖片]"
+            elif msg.message_type.value == "audio":
+                content = f"[{time_str}] {sender}: [音訊]"
+            else:
+                content = f"[{time_str}] {sender}: [{msg.message_type.value}]"
+
+            blocks.append({
+                "object": "block",
+                "type": "quote",
+                "quote": {
+                    "rich_text": _split_rich_text(content)
+                }
+            })
+
+        # Notion 單次建立頁面最多 100 個子區塊
+        if len(blocks) > 100:
+            logger.warning(
+                f"內容區塊 {len(blocks)} 個超過 Notion 上限 100，截斷尾部"
+            )
+            blocks = blocks[:100]
 
         return blocks

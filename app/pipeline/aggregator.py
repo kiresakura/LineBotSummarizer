@@ -94,27 +94,33 @@ class MessageAggregator:
 
             # 2. AI 分類
             from app.pipeline.classifier import MessageClassifier
+            settings = get_settings()
             classifier = MessageClassifier()
             result = await classifier.classify(group_id, batch)
 
-            if result and result.importance.value != "noise":
-                from app.pipeline.writer import NotionWriter
-                writer = NotionWriter()
-                await writer.write(result)
-                logger.info(f"已寫入 Notion: [{result.category}] {result.summary[:50]}")
+            if result is None:
+                logger.debug("AI 分類回傳空結果，跳過寫入")
+                return
 
-                # 回覆群組：已統整寫入 Notion
-                importance = IMPORTANCE_LABEL.get(result.importance.value, result.importance.value)
-                tags = " ".join(f"#{t}" for t in result.tags[:5])
-                reply = (
-                    f"📥 已統整 {len(batch)} 則訊息寫入 Notion 資料庫\n"
-                    f"分類：{result.category}｜重要性：{importance}\n"
-                    f"{tags}"
-                )
-
-                await send_to_group(group_id, reply)
-            else:
+            if result.importance.value == "noise" and settings.noise_filter_enabled:
                 logger.debug("訊息被判定為噪音，跳過寫入")
+                return
+
+            from app.pipeline.writer import NotionWriter
+            writer = NotionWriter()
+            await writer.write(result)
+            logger.info(f"已寫入 Notion: [{result.category}] {result.summary[:50]}")
+
+            # 回覆群組：已統整寫入 Notion
+            importance = IMPORTANCE_LABEL.get(result.importance.value, result.importance.value)
+            tags = " ".join(f"#{t}" for t in result.tags[:5])
+            reply = (
+                f"📥 已統整 {len(batch)} 則訊息寫入 Notion 資料庫\n"
+                f"分類：{result.category}｜重要性：{importance}\n"
+                f"{tags}"
+            )
+
+            await send_to_group(group_id, reply)
 
         except Exception as e:
             logger.error(f"分類/寫入失敗: {e}", exc_info=True)
