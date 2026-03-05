@@ -1,4 +1,4 @@
-"""LINE 訊息發送服務 — 群組回覆摘要 + 管理員錯誤通知"""
+"""LINE 訊息發送服務 — 群組回覆 + Loading 動畫 + 管理員通知"""
 
 import logging
 import httpx
@@ -7,6 +7,25 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
+LINE_LOADING_URL = "https://api.line.me/v2/bot/chat/loading/start"
+
+
+async def show_loading(chat_id: str, seconds: int = 60):
+    """顯示 LINE Loading 動畫（正在輸入...），最長 60 秒"""
+    settings = get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                LINE_LOADING_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.line_channel_access_token}",
+                    "Content-Type": "application/json",
+                },
+                json={"chatId": chat_id, "loadingSeconds": min(seconds, 60)},
+            )
+            response.raise_for_status()
+    except Exception as e:
+        logger.debug(f"Loading 動畫啟動失敗（不影響功能）: {e}")
 
 
 async def send_to_group(group_id: str, text: str):

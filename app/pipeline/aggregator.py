@@ -77,9 +77,22 @@ class MessageAggregator:
 
     async def _classify_batch(self, group_id: str, batch: list[RawMessage]):
         """呼叫 AI 分類器處理一批訊息，完成後回覆群組"""
-        from app.services.line_notify import send_to_group, notify_admin
+        from app.services.line_notify import send_to_group, notify_admin, show_loading
 
         try:
+            # 1. 立即回饋：通知使用者 + Loading 動畫
+            has_urls = any(msg.url_contents for msg in batch)
+            has_media = any(msg.has_media for msg in batch)
+            hint_parts = [f"📋 收到 {len(batch)} 則訊息，開始整理知識點"]
+            if has_urls:
+                hint_parts.append("🔗 含連結內容")
+            if has_media:
+                hint_parts.append("🖼 含媒體檔案")
+            hint_parts.append("⏳ 請稍候...")
+            await send_to_group(group_id, "｜".join(hint_parts))
+            await show_loading(group_id)
+
+            # 2. AI 分類
             from app.pipeline.classifier import MessageClassifier
             classifier = MessageClassifier()
             result = await classifier.classify(group_id, batch)
