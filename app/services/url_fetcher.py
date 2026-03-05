@@ -1,31 +1,35 @@
-"""URL 內容爬取服務 — 支援 YouTube / BiliBili 字幕 + 一般網頁"""
+"""URL 內容爬取服務 — yt-dlp 影片提取 + BeautifulSoup 一般網頁"""
 
 import re
 import json
+import asyncio
 import logging
 import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-YOUTUBE_PATTERN = re.compile(
-    r'(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]+)', re.IGNORECASE
+# yt-dlp 支援的影片網站
+VIDEO_SITE_PATTERN = re.compile(
+    r'(?:youtube\.com|youtu\.be|bilibili\.com/video|'
+    r'twitter\.com/\S+/status|x\.com/\S+/status|'
+    r'tiktok\.com|vimeo\.com|dailymotion\.com|'
+    r'twitch\.tv/videos|nicovideo\.jp)',
+    re.IGNORECASE
 )
-BILIBILI_PATTERN = re.compile(
-    r'bilibili\.com/video/(BV[\w]+)', re.IGNORECASE
-)
+
+SUBTITLE_LANG_PRIORITY = ['zh-TW', 'zh-Hant', 'zh', 'zh-Hans', 'en']
 
 
 async def fetch_url_content(url: str) -> dict | None:
     """爬取 URL 內容，回傳 {"url", "title", "content"}"""
     try:
-        yt_match = YOUTUBE_PATTERN.search(url)
-        if yt_match:
-            return await _fetch_youtube(yt_match.group(1), url)
-
-        bili_match = BILIBILI_PATTERN.search(url)
-        if bili_match:
-            return await _fetch_bilibili(bili_match.group(1), url)
+        if VIDEO_SITE_PATTERN.search(url):
+            result = await _fetch_video(url)
+            if result:
+                return result
+            # yt-dlp 失敗時退回一般網頁爬取
+            logger.info(f"yt-dlp 未能處理，退回網頁爬取: {url}")
 
         return await _fetch_webpage(url)
     except Exception as e:
@@ -33,187 +37,158 @@ async def fetch_url_content(url: str) -> dict | None:
         return None
 
 
-# === YouTube ===
+# === 影片提取（yt-dlp） ===
 
-async def _fetch_youtube(video_id: str, url: str) -> dict | None:
-    """抓取 YouTube 影片標題 + 字幕"""
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(
-            f"https://www.youtube.com/watch?v={video_id}",
-            headers={"Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8"},
-        )
-        response.raise_for_status()
-        html = response.text
+async def _fetch_video(url: str) -> dict | None:
+    """使用 yt-dlp 提取影片資訊 + 字幕"""
+    import yt_dlp
 
-        title = ""
-        title_match = re.search(r'<title>(.*?)</title>', html)
-        if title_match:
-            title = title_match.group(1).replace(" - YouTube", "").strip()
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'skip_download': True,
+        'ignoreerrors': True,
+        'socket_timeout': 15,
+        'extractor_retries': 2,
+    }
 
-        description = ""
-        desc_match = re.search(r'"shortDescription":"(.*?)"', html)
-        if desc_match:
-            description = desc_match.group(1).replace("\\n", "\n")[:2000]
+    def extract():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            return ydl.extract_info(url, download=False)
 
-        transcript = await _fetch_youtube_transcript(html, client)
-
-        content_parts = []
-        if title:
-            content_parts.append(f"影片標題：{title}")
-        if description:
-            content_parts.append(f"影片描述：{description[:500]}")
-        if transcript:
-            content_parts.append(f"影片逐字稿：\n{transcript[:5000]}")
-        else:
-            content_parts.append("（無法取得字幕，僅根據標題和描述分析）")
-
-        if not content_parts:
-            return None
-
-        return {
-            "url": url,
-            "title": title or f"YouTube 影片 {video_id}",
-            "content": "\n\n".join(content_parts),
-        }
-
-
-async def _fetch_youtube_transcript(html: str, client: httpx.AsyncClient) -> str:
-    """從已抓取的 YouTube 頁面提取字幕"""
     try:
-        caption_match = re.search(r'"captionTracks":\[(.*?)\]', html)
-        if not caption_match:
-            return ""
+        loop = asyncio.get_event_loop()
+        info = await loop.run_in_executor(None, extract)
+    except Exception as e:
+        logger.warning(f"yt-dlp 提取失敗 {url}: {e}")
+        return None
 
-        tracks_str = caption_match.group(1)
-        caption_url = ""
-        for lang in ["zh-TW", "zh-Hant", "zh", "zh-Hans", "en"]:
-            lang_match = re.search(
-                r'"baseUrl":"(.*?)".*?"languageCode":"' + lang + '"', tracks_str
-            )
-            if lang_match:
-                caption_url = lang_match.group(1).replace("\\u0026", "&")
-                break
+    if not info:
+        return None
 
-        if not caption_url:
-            first_match = re.search(r'"baseUrl":"(.*?)"', tracks_str)
-            if first_match:
-                caption_url = first_match.group(1).replace("\\u0026", "&")
+    title = info.get('title', '')
+    description = info.get('description', '')
+    uploader = info.get('uploader', '') or info.get('channel', '')
+    duration = info.get('duration_string', '')
+    tags = info.get('tags') or []
 
-        if not caption_url:
-            return ""
+    # 提取字幕
+    transcript = await _extract_subtitles(info)
 
-        resp = await client.get(caption_url)
-        resp.raise_for_status()
+    content_parts = []
+    if title:
+        content_parts.append(f"影片標題：{title}")
+    if uploader:
+        content_parts.append(f"頻道/上傳者：{uploader}")
+    if duration:
+        content_parts.append(f"影片長度：{duration}")
+    if description:
+        content_parts.append(f"影片描述：{description[:1000]}")
+    if transcript:
+        content_parts.append(f"影片逐字稿：\n{transcript[:8000]}")
+    else:
+        content_parts.append("（無法取得字幕，僅根據標題和描述分析）")
+    if tags:
+        content_parts.append(f"影片標籤：{', '.join(str(t) for t in tags[:10])}")
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-        texts = [tag.get_text() for tag in soup.find_all("text")]
-        return " ".join(texts)
+    if not any([title, description, transcript]):
+        return None
+
+    return {
+        "url": url,
+        "title": title or url,
+        "content": "\n\n".join(content_parts),
+    }
+
+
+async def _extract_subtitles(info: dict) -> str:
+    """從 yt-dlp 影片資訊中提取最適合的字幕"""
+    # 優先手動字幕，其次自動產生字幕
+    for sub_key in ['subtitles', 'automatic_captions']:
+        subs = info.get(sub_key, {})
+        if not subs:
+            continue
+
+        sub_url = _find_best_subtitle_url(subs)
+        if sub_url:
+            text = await _download_subtitle(sub_url)
+            if text:
+                return text
+
+    return ""
+
+
+def _find_best_subtitle_url(subs: dict) -> str | None:
+    """按語言優先級 + 格式優先級找到最佳字幕 URL"""
+    # 先按語言優先級搜尋
+    candidates = list(SUBTITLE_LANG_PRIORITY)
+    # 補上其餘可用語言
+    for lang_key in subs:
+        if lang_key not in candidates:
+            candidates.append(lang_key)
+
+    for lang in candidates:
+        if lang not in subs:
+            continue
+        formats = subs[lang]
+        if not formats:
+            continue
+        # 按格式優先級: json3 > vtt > srv1 > 任意
+        for fmt_pref in ['json3', 'vtt', 'srv1']:
+            for fmt in formats:
+                if fmt.get('ext') == fmt_pref and fmt.get('url'):
+                    return fmt['url']
+        # 沒有偏好格式就取第一個有 URL 的
+        for fmt in formats:
+            if fmt.get('url'):
+                return fmt['url']
+
+    return None
+
+
+async def _download_subtitle(url: str) -> str:
+    """下載並解析字幕內容（支援 JSON3 / VTT / SRT）"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            content = resp.text
+
+        # 嘗試 JSON3 格式（YouTube 常用）
+        try:
+            data = json.loads(content)
+            if 'events' in data:
+                texts = []
+                for event in data['events']:
+                    for seg in event.get('segs', []):
+                        text = seg.get('utf8', '').strip()
+                        if text and text != '\n':
+                            texts.append(text)
+                return ' '.join(texts)
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+        # VTT / SRT 格式
+        lines = content.split('\n')
+        text_lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith('WEBVTT') or line.startswith('NOTE'):
+                continue
+            if '-->' in line:
+                continue
+            if re.match(r'^\d+$', line):
+                continue
+            line = re.sub(r'<[^>]+>', '', line)
+            if line:
+                text_lines.append(line)
+
+        return ' '.join(text_lines)
 
     except Exception as e:
-        logger.debug(f"YouTube 字幕抓取失敗: {e}")
-        return ""
-
-
-# === BiliBili ===
-
-async def _fetch_bilibili(bvid: str, url: str) -> dict | None:
-    """抓取 BiliBili 影片標題、描述 + 字幕"""
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. 取得影片資訊
-        info_resp = await client.get(
-            f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}",
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Referer": "https://www.bilibili.com/",
-            },
-        )
-        info_resp.raise_for_status()
-        info = info_resp.json()
-
-        if info.get("code") != 0:
-            return await _fetch_webpage(url)
-
-        data = info.get("data", {})
-        title = data.get("title", "")
-        description = data.get("desc", "")
-        cid = data.get("cid", 0)
-        aid = data.get("aid", 0)
-
-        # 2. 嘗試抓取字幕
-        transcript = ""
-        if cid and aid:
-            transcript = await _fetch_bilibili_subtitle(aid, cid, client)
-
-        content_parts = []
-        if title:
-            content_parts.append(f"影片標題：{title}")
-        if description:
-            content_parts.append(f"影片描述：{description[:500]}")
-        if transcript:
-            content_parts.append(f"影片逐字稿：\n{transcript[:5000]}")
-        else:
-            content_parts.append("（無法取得字幕，僅根據標題和描述分析）")
-
-        # 補充標籤
-        tags_resp = await client.get(
-            f"https://api.bilibili.com/x/tag/archive/tags?bvid={bvid}",
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.bilibili.com/"},
-        )
-        if tags_resp.status_code == 200:
-            tags_data = tags_resp.json().get("data", [])
-            if tags_data:
-                tag_names = [t.get("tag_name", "") for t in tags_data[:10]]
-                content_parts.append(f"影片標籤：{', '.join(tag_names)}")
-
-        if not content_parts:
-            return None
-
-        return {
-            "url": url,
-            "title": title or f"BiliBili 影片 {bvid}",
-            "content": "\n\n".join(content_parts),
-        }
-
-
-async def _fetch_bilibili_subtitle(aid: int, cid: int, client: httpx.AsyncClient) -> str:
-    """抓取 BiliBili 字幕"""
-    try:
-        resp = await client.get(
-            f"https://api.bilibili.com/x/player/v2?aid={aid}&cid={cid}",
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.bilibili.com/"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        subtitles = data.get("data", {}).get("subtitle", {}).get("subtitles", [])
-        if not subtitles:
-            return ""
-
-        # 優先中文字幕
-        sub_url = ""
-        for sub in subtitles:
-            lang = sub.get("lan", "")
-            if "zh" in lang:
-                sub_url = sub.get("subtitle_url", "")
-                break
-        if not sub_url and subtitles:
-            sub_url = subtitles[0].get("subtitle_url", "")
-
-        if not sub_url:
-            return ""
-
-        if sub_url.startswith("//"):
-            sub_url = "https:" + sub_url
-
-        sub_resp = await client.get(sub_url)
-        sub_resp.raise_for_status()
-        sub_data = sub_resp.json()
-
-        texts = [item.get("content", "") for item in sub_data.get("body", [])]
-        return " ".join(texts)
-
-    except Exception as e:
-        logger.debug(f"BiliBili 字幕抓取失敗: {e}")
+        logger.debug(f"字幕下載失敗: {e}")
         return ""
 
 

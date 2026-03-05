@@ -30,9 +30,8 @@ LINE Group → Webhook → 即時聚合 → AI 知識點整理 → Notion Databa
 - **即時處理** — 3 秒防抖機制，連發訊息自動合併後立即處理
 - **完整知識點整理** — 不做摘要，完整提取所有知識點歸納到知識庫
 - **URL 內容爬取** — 自動爬取連結內容：
-  - YouTube：影片標題 + 描述 + 字幕逐字稿
-  - BiliBili：影片資訊 + 字幕 + 標籤
-  - 一般網頁：標題 + Meta 描述 + 正文內容
+  - 影片網站（yt-dlp）：YouTube、BiliBili、Twitter/X、TikTok、Vimeo 等 1000+ 站點，自動提取標題、描述、字幕逐字稿
+  - 一般網頁（BeautifulSoup）：標題 + Meta 描述 + 正文內容
 - **多模態 AI 分析** — 支援文字、圖片辨識、音訊辨識
 - **智慧模型路由** — 依內容類型自動選擇最高 CP 值模型
 - **Notion 知識庫** — 結構化寫入，含分類標籤、待辦事項、原始訊息
@@ -61,6 +60,7 @@ LINE Group → Webhook → 即時聚合 → AI 知識點整理 → Notion Databa
 | LINE 整合 | LINE Messaging API v3 |
 | 資料寫入 | Notion API |
 | 資料驗證 | Pydantic v2 |
+| 影片提取 | yt-dlp（1000+ 影片站點） |
 | 網頁爬取 | httpx + BeautifulSoup |
 | 部署 | Railway |
 | 語言 | Python 3.11+ |
@@ -80,7 +80,7 @@ LINE Group → Webhook → 即時聚合 → AI 知識點整理 → Notion Databa
 │   │   └── writer.py        # Notion 寫入（含速率限制）
 │   └── services/
 │       ├── ai_service.py    # OpenRouter API 封裝（文字+多模態）
-│       ├── url_fetcher.py   # URL 內容爬取（YouTube/BiliBili/網頁）
+│       ├── url_fetcher.py   # URL 內容爬取（yt-dlp 影片 + 一般網頁）
 │       └── line_notify.py   # LINE 推播通知（群組回覆+管理員通知）
 ├── Dockerfile
 ├── pyproject.toml
