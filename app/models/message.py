@@ -69,7 +69,8 @@ class ClassifiedMessage(BaseModel):
     """AI 分類後的訊息"""
     category: str
     importance: Importance
-    summary: str
+    title: str = ""
+    summary: str  # 完整知識點內容
     tags: list[str] = Field(default_factory=list)
     action_items: list[str] = Field(default_factory=list)
     original_messages: list[RawMessage]

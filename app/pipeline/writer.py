@@ -84,18 +84,11 @@ class NotionWriter:
         """構建 Notion Page Properties"""
         settings = get_settings()
 
-        # 摘要標題（截取前 100 字）
-        title = classified.summary[:100] if classified.summary else "未命名訊息"
-
-        # 原始訊息合併
-        original_text = "\n".join(
-            f"[{m.timestamp.strftime('%H:%M')}] {m.user_name or m.user_id[:8]}: {m.text}"
-            for m in classified.original_messages
-            if m.text
-        )
+        # 使用 AI 生成的標題，退回到知識點前 100 字
+        title = classified.title or classified.summary[:100] or "未命名訊息"
 
         properties = {
-            "Title": {"title": [{"text": {"content": title}}]},
+            "Title": {"title": [{"text": {"content": title[:100]}}]},
             "Category": {"select": {"name": classified.category}},
             "Importance": {
                 "select": {
@@ -132,25 +125,52 @@ class NotionWriter:
 
         return properties
 
+    def _split_text_blocks(self, text: str, block_type: str = "paragraph") -> list:
+        """將長文字拆分為多個 Notion block（每個 block 上限 2000 字元）"""
+        blocks = []
+        # 按段落分割，盡量保持語意完整
+        paragraphs = text.split("\n")
+        current_chunk = ""
+
+        for para in paragraphs:
+            if len(current_chunk) + len(para) + 1 > 1900:
+                if current_chunk:
+                    blocks.append({
+                        "object": "block",
+                        "type": block_type,
+                        block_type: {
+                            "rich_text": [{"text": {"content": current_chunk}}]
+                        }
+                    })
+                current_chunk = para
+            else:
+                current_chunk = current_chunk + "\n" + para if current_chunk else para
+
+        if current_chunk:
+            blocks.append({
+                "object": "block",
+                "type": block_type,
+                block_type: {
+                    "rich_text": [{"text": {"content": current_chunk}}]
+                }
+            })
+
+        return blocks
+
     def _build_content_blocks(self, classified: ClassifiedMessage) -> list:
         """構建 Notion Page 內容區塊"""
         blocks = []
 
-        # 摘要區
+        # 知識點整理區
         blocks.append({
             "object": "block",
             "type": "heading_2",
             "heading_2": {
-                "rich_text": [{"text": {"content": "📝 摘要"}}]
+                "rich_text": [{"text": {"content": "📚 知識點整理"}}]
             }
         })
-        blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [{"text": {"content": classified.summary}}]
-            }
-        })
+        # 拆分長內容為多個 block
+        blocks.extend(self._split_text_blocks(classified.summary))
 
         # 待辦事項
         if classified.action_items:
