@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     admin_line_user_id: str = ""
 
     # 處理設定
-    aggregation_window_seconds: int = 300  # 訊息聚合視窗（秒）
-    min_batch_size: int = 3
+    aggregation_window_seconds: int = 30  # 訊息聚合視窗（秒）
+    min_batch_size: int = 1
     max_batch_size: int = 20
     notion_rate_limit: float = 2.5  # req/s，低於 Notion 上限 3/s
 
