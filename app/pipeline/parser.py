@@ -1,10 +1,11 @@
-"""Stage 1: 訊息解析器 — 提取文字、URL、下載圖片/音訊"""
+"""Stage 1: 訊息解析器 — 提取文字、URL 爬取、下載圖片/音訊"""
 
 import re
 import logging
 import httpx
 from app.config import get_settings
 from app.models.message import RawMessage, MessageType
+from app.services.url_fetcher import fetch_url_content
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,12 @@ class MessageParser:
         if msg.message_type == MessageType.TEXT:
             urls = URL_PATTERN.findall(msg.text)
             if urls:
-                logger.info(f"發現 {len(urls)} 個 URL: {urls}")
+                logger.info(f"發現 {len(urls)} 個 URL，開始爬取內容...")
+                for url in urls[:3]:  # 最多爬 3 個 URL
+                    result = await fetch_url_content(url)
+                    if result:
+                        msg.url_contents.append(result)
+                        logger.info(f"已爬取: {result['title'][:50]}")
             await aggregator.add_message(msg.group_id, msg)
 
         elif msg.message_type == MessageType.IMAGE:

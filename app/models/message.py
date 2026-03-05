@@ -31,6 +31,7 @@ class RawMessage(BaseModel):
     user_name: str = ""
     message_type: MessageType
     text: str = ""
+    url_contents: list[dict] = Field(default_factory=list)  # [{"url": ..., "title": ..., "content": ...}]
     media_url: str | None = None
     media_content: bytes | None = None
     media_mime_type: str | None = None
