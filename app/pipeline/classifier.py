@@ -115,7 +115,9 @@ class MessageClassifier:
             media_type_names = set(item["type"] for item in media_items)
             prompt += MULTIMODAL_ADDENDUM.format(
                 media_count=len(media_items),
-                media_types="、".join("圖片" if t == "image" else "音訊" for t in media_type_names),
+                media_types="、".join(
+                    "圖片" if t == "image" else "音訊" for t in media_type_names
+                ),
             )
 
         # 呼叫 AI（增大 token 上限以保留完整內容）
@@ -130,7 +132,9 @@ class MessageClassifier:
                 )
             else:
                 response = await self.ai.complete(
-                    prompt, content_type=content_type, max_tokens=max_tokens,
+                    prompt,
+                    content_type=content_type,
+                    max_tokens=max_tokens,
                 )
 
             result = self._parse_response(response)
@@ -177,7 +181,9 @@ class MessageClassifier:
             parts.append(uc["content"])
             parts.append("")
 
-        parts.append("請根據以上連結內容進行深入統整，完整提取所有知識點，不要省略任何細節。")
+        parts.append(
+            "請根據以上連結內容進行深入統整，完整提取所有知識點，不要省略任何細節。"
+        )
         return "\n".join(parts)
 
     def _extract_media(self, messages: list[RawMessage]) -> list[dict]:
@@ -187,17 +193,21 @@ class MessageClassifier:
             if not msg.has_media:
                 continue
             if msg.message_type == MessageType.IMAGE:
-                media_items.append({
-                    "type": "image",
-                    "data": msg.media_content,
-                    "mime_type": msg.media_mime_type or "image/jpeg",
-                })
+                media_items.append(
+                    {
+                        "type": "image",
+                        "data": msg.media_content,
+                        "mime_type": msg.media_mime_type or "image/jpeg",
+                    }
+                )
             elif msg.message_type == MessageType.AUDIO:
-                media_items.append({
-                    "type": "audio",
-                    "data": msg.media_content,
-                    "mime_type": msg.media_mime_type or "audio/m4a",
-                })
+                media_items.append(
+                    {
+                        "type": "audio",
+                        "data": msg.media_content,
+                        "mime_type": msg.media_mime_type or "audio/m4a",
+                    }
+                )
         return media_items
 
     def _determine_content_type(self, media_items: list[dict]) -> ContentType:
@@ -242,7 +252,7 @@ class MessageClassifier:
         try:
             return json.loads(response)
         except json.JSONDecodeError:
-            match = re.search(r'```(?:json)?\s*(.*?)\s*```', response, re.DOTALL)
+            match = re.search(r"```(?:json)?\s*(.*?)\s*```", response, re.DOTALL)
             if match:
                 try:
                     return json.loads(match.group(1))

@@ -161,3 +161,19 @@ docker run -p 8000:8000 --env-file .env linebot-summarizer
 | 部署主機 (Railway) | NT$0-150 |
 | Notion / LINE API | 免費 |
 | **合計** | **< NT$200/月** |
+
+## 安全性
+
+- **Webhook 驗章**：受 LINE HMAC-SHA256 簽章驗證保護，`LINE_CHANNEL_SECRET` 不可留空（留空時一律拒絕請求）。
+- **SSRF 防護**：URL 爬取走 `app/services/safe_http.py` — scheme 白名單、封鎖私有/內網/loopback/雲端 metadata 位址、逐跳重新驗證重導、限制回應大小。
+- **金鑰管理**：所有金鑰僅由環境變數注入；**請勿** commit `.env` 或將其放入 Docker image（已由 `.gitignore` / `.dockerignore` 排除）。
+- 漏洞回報請見 [`SECURITY.md`](SECURITY.md)。
+
+## 隱私
+
+本服務會擷取 LINE 群組成員的訊息、圖片、語音，並送往第三方 AI 服務（OpenRouter）分析後寫入 Notion。
+**自行部署前，請取得群組成員的知情同意，並評估當地個資法規（如台灣《個人資料保護法》），以及各 AI 供應商的資料留存政策。**
+
+## 授權
+
+本專案採用 [MIT License](LICENSE)。

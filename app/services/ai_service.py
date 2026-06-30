@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class ContentType(str, Enum):
     """內容模態，用於模型路由"""
+
     TEXT = "text"
     IMAGE = "image"
     AUDIO = "audio"
@@ -92,18 +93,22 @@ class AIService:
             mime_type = item["mime_type"]
 
             if item["type"] == "image":
-                content_parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
-                })
+                content_parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
+                    }
+                )
             elif item["type"] == "audio":
-                content_parts.append({
-                    "type": "input_audio",
-                    "input_audio": {
-                        "data": b64_data,
-                        "format": mime_type.split("/")[-1],
-                    },
-                })
+                content_parts.append(
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": b64_data,
+                            "format": mime_type.split("/")[-1],
+                        },
+                    }
+                )
 
         try:
             response = await client.chat.completions.create(

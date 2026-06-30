@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Notion
     notion_api_key: str = ""
-    notion_database_id: str = ""        # 主知識庫 Database ID
+    notion_database_id: str = ""  # 主知識庫 Database ID
     notion_digest_database_id: str = ""  # 每日摘要 Database ID
 
     # AI (OpenRouter)
@@ -36,8 +36,14 @@ class Settings(BaseSettings):
     # 分類設定
     noise_filter_enabled: bool = True  # 是否過濾噪音訊息
     categories: list[str] = [
-        "技術分享", "新聞資訊", "工具推薦", "問題討論",
-        "學習資源", "專案更新", "靈感想法", "其他"
+        "技術分享",
+        "新聞資訊",
+        "工具推薦",
+        "問題討論",
+        "學習資源",
+        "專案更新",
+        "靈感想法",
+        "其他",
     ]
 
     class Config:

@@ -1,5 +1,9 @@
 # LINE Bot × Notion 知識庫整合系統 — 技術架構規劃
 
+> **註**：本文件為專案**初期的設計規劃**，部分技術選型（如 Redis/Celery、SQLite、Claude/OpenAI API）
+> 與**最終實作**不同。實作以 asyncio 記憶體聚合 + OpenRouter 多模型路由為主，
+> 請以 [`README.md`](README.md) 與實際程式碼為準。
+
 ## 1. 專案概述
 
 ### 目標

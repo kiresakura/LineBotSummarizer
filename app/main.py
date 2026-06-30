@@ -9,8 +9,7 @@ from app.webhook.handler import router as webhook_router
 from app.pipeline.aggregator import MessageAggregator
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,9 @@ async def lifespan(app: FastAPI):
     """應用生命週期管理"""
     settings = get_settings()
     logger.info("LINE Bot 知識庫助手啟動中...")
-    logger.info(f"   AI Models: text={settings.ai_model_text}, vision={settings.ai_model_vision}, audio={settings.ai_model_audio}")
+    logger.info(
+        f"   AI Models: text={settings.ai_model_text}, vision={settings.ai_model_vision}, audio={settings.ai_model_audio}"
+    )
     logger.info(f"   聚合視窗: {settings.aggregation_window_seconds}s")
 
     # 啟動聚合器的定時沖洗

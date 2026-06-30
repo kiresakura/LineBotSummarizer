@@ -94,6 +94,7 @@ class MessageAggregator:
 
             # 2. AI 分類
             from app.pipeline.classifier import MessageClassifier
+
             settings = get_settings()
             classifier = MessageClassifier()
             result = await classifier.classify(group_id, batch)
@@ -107,12 +108,15 @@ class MessageAggregator:
                 return
 
             from app.pipeline.writer import NotionWriter
+
             writer = NotionWriter()
             await writer.write(result)
             logger.info(f"已寫入 Notion: [{result.category}] {result.summary[:50]}")
 
             # 回覆群組：已統整寫入 Notion
-            importance = IMPORTANCE_LABEL.get(result.importance.value, result.importance.value)
+            importance = IMPORTANCE_LABEL.get(
+                result.importance.value, result.importance.value
+            )
             tags = " ".join(f"#{t}" for t in result.tags[:5])
             reply = (
                 f"📥 已統整 {len(batch)} 則訊息寫入 Notion 資料庫\n"

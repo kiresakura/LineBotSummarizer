@@ -6,13 +6,14 @@ import httpx
 from app.config import get_settings
 from app.models.message import RawMessage, MessageType
 from app.services.url_fetcher import fetch_url_content
+from app.services.safe_http import safe_get, UnsafeURLError
 
 logger = logging.getLogger(__name__)
 
-URL_PATTERN = re.compile(
-    r'https?://[^\s<>"{}|\\^`\[\]]+',
-    re.IGNORECASE
-)
+URL_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+', re.IGNORECASE)
+
+MAX_URLS_PER_MESSAGE = 3
+MAX_LINE_MEDIA_BYTES = 20 * 1024 * 1024  # LINE 媒體上限 20 MB（防記憶體 DoS）
 
 
 class MessageParser:
@@ -26,7 +27,7 @@ class MessageParser:
             urls = URL_PATTERN.findall(msg.text)
             if urls:
                 logger.info(f"發現 {len(urls)} 個 URL，開始爬取內容...")
-                for url in urls[:3]:  # 最多爬 3 個 URL
+                for url in urls[:MAX_URLS_PER_MESSAGE]:  # 最多爬 3 個 URL
                     result = await fetch_url_content(url)
                     if result:
                         msg.url_contents.append(result)
@@ -55,27 +56,34 @@ class MessageParser:
             logger.debug(f"跳過不支援的訊息類型: {msg.message_type}")
 
     async def _download_line_content(self, msg: RawMessage):
-        """從 LINE Content API 下載媒體內容"""
+        """從 LINE Content API 下載媒體內容（含大小上限，防記憶體 DoS）"""
         settings = get_settings()
         url = f"https://api-data.line.me/v2/bot/message/{msg.message_id}/content"
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    url,
-                    headers={"Authorization": f"Bearer {settings.line_channel_access_token}"},
-                )
-                response.raise_for_status()
+            response = await safe_get(
+                url,
+                max_bytes=MAX_LINE_MEDIA_BYTES,
+                timeout=30.0,
+                headers={
+                    "Authorization": f"Bearer {settings.line_channel_access_token}"
+                },
+            )
+            msg.media_content = response.content
+            msg.media_mime_type = response.headers.get(
+                "content-type", "application/octet-stream"
+            )
 
-                msg.media_content = response.content
-                msg.media_mime_type = response.headers.get("content-type", "application/octet-stream")
-
-                logger.info(
-                    f"下載完成: {msg.message_id}, "
-                    f"大小={len(msg.media_content)} bytes, "
-                    f"type={msg.media_mime_type}"
-                )
+            logger.info(
+                f"下載完成: {msg.message_id}, "
+                f"大小={len(msg.media_content)} bytes, "
+                f"type={msg.media_mime_type}"
+            )
+        except UnsafeURLError as e:
+            logger.error(f"LINE 內容下載被安全檢查拒絕: {e} for {msg.message_id}")
         except httpx.HTTPStatusError as e:
-            logger.error(f"LINE 內容下載 HTTP 錯誤: {e.response.status_code} for {msg.message_id}")
+            logger.error(
+                f"LINE 內容下載 HTTP 錯誤: {e.response.status_code} for {msg.message_id}"
+            )
         except Exception as e:
             logger.error(f"LINE 內容下載失敗: {e} for {msg.message_id}")

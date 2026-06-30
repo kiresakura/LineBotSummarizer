@@ -1,0 +1,11 @@
+# gitleaks 設定 — 沿用預設規則，但允許 .env.example 內的佔位符，避免誤判。
+title = "linebot-summarizer gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore placeholder secrets in example config"
+paths = [
+  '''\.env\.example$''',
+]

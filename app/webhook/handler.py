@@ -18,6 +18,13 @@ parser = MessageParser()
 def verify_signature(body: bytes, signature: str) -> bool:
     """驗證 LINE Webhook 簽名，確保請求來自 LINE Platform"""
     settings = get_settings()
+    # fail-closed：密鑰未設定或簽名缺失時一律拒絕，
+    # 避免空密鑰情境下攻擊者用空 key 算出相同 HMAC 而偽造請求
+    if not settings.line_channel_secret:
+        logger.error("LINE_CHANNEL_SECRET 未設定，拒絕所有 webhook 請求")
+        return False
+    if not signature:
+        return False
     channel_secret = settings.line_channel_secret.encode("utf-8")
     hash_value = hmac.new(channel_secret, body, hashlib.sha256).digest()
     expected = base64.b64encode(hash_value).decode("utf-8")

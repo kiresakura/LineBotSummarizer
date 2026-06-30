@@ -1,0 +1,37 @@
+# 機密 — 絕不可進入 image
+.env
+.env.*
+!.env.example
+
+# 版控與歷史（避免把整段 git 歷史烤進 image layer）
+.git
+.gitignore
+
+# Python 產物
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 開發 / CI / 文件（執行期不需要）
+tests/
+.github/
+.pre-commit-config.yaml
+CLAUDE.md
+.claude/
+architecture.md
+*.md
+!README.md
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
