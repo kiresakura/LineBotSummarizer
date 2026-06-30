@@ -24,7 +24,7 @@ dependencies = [
     "httpx>=0.25",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    "beautifulsoup4>=4.12",
+    "beautifulsoup4>=4.15.0",
     "yt-dlp>=2024.0",
 ]
 
