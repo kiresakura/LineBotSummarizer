@@ -12,3 +12,7 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      # gitleaks-action v3 在此設定下會誤判失敗；維持可正常運作的 v2
+      - dependency-name: "gitleaks/gitleaks-action"
+        update-types: ["version-update:semver-major"]
