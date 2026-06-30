@@ -19,5 +19,15 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Lorekeeper local output
+knowledge/
+_test_out/
+_demo_out/
+
 # Claude Code
 .claude/

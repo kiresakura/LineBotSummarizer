@@ -1,179 +1,187 @@
-# LINE Bot Summarizer
+# 🧭 Lorekeeper
 
-LINE 群組訊息自動知識庫系統 — 將群組對話即時分類、完整整理知識點，寫入 Notion 知識庫。
+[![ci](https://github.com/kiresakura/lorekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/kiresakura/lorekeeper/actions/workflows/ci.yml)
+[![secret-scan](https://github.com/kiresakura/lorekeeper/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/kiresakura/lorekeeper/actions/workflows/secret-scan.yml)
+![python](https://img.shields.io/badge/python-3.11%2B-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
 
-支援文字、圖片、音訊多模態訊息分析，自動爬取 URL 內容（YouTube / BiliBili 字幕 + 一般網頁）。
+Turn noisy group chats into a structured, searchable knowledge base — automatically.
 
-## 架構概覽
-
-```
-LINE Group → Webhook → 即時聚合 → AI 知識點整理 → Notion Database
-                         ↓
-                    URL 爬取 / 媒體下載
-```
-
-```
-┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐     ┌────────┐
-│  LINE    │────▶│ Webhook  │────▶│Aggregator │────▶│Classifier│────▶│ Notion │
-│  Groups  │     │ (FastAPI)│     │ (3s 防抖) │     │(OpenRouter)│   │ Writer │
-└──────────┘     └──────────┘     └───────────┘     └──────────┘     └────────┘
-                                       │                                  │
-                                  ┌────┴────┐                        ┌────┴────┐
-                                  │ Parser  │                        │  LINE   │
-                                  │URL爬取  │                        │ 通知回覆│
-                                  │媒體下載 │                        └─────────┘
-                                  └─────────┘
-```
-
-## 功能特色
-
-- **即時處理** — 3 秒防抖機制，連發訊息自動合併後立即處理
-- **完整知識點整理** — 不做摘要，完整提取所有知識點歸納到知識庫
-- **URL 內容爬取** — 自動爬取連結內容：
-  - 影片網站（yt-dlp）：YouTube、BiliBili、Twitter/X、TikTok、Vimeo 等 1000+ 站點，自動提取標題、描述、字幕逐字稿
-  - 一般網頁（BeautifulSoup）：標題 + Meta 描述 + 正文內容
-- **多模態 AI 分析** — 支援文字、圖片辨識、音訊辨識
-- **智慧模型路由** — 依內容類型自動選擇最高 CP 值模型
-- **Notion 知識庫** — 結構化寫入，含分類標籤、待辦事項、原始訊息
-- **即時進度回饋** — 開始整理時立刻通知 + Loading 動畫，完成後回覆結果
-- **管理員通知** — 錯誤發生時私訊管理員
-- **噪音過濾** — 自動跳過貼圖、打招呼等低價值訊息
-
-## AI 模型路由
-
-透過 [OpenRouter](https://openrouter.ai/) 統一 API，依內容類型自動選擇模型：
-
-| 內容類型 | 預設模型 | 輸入價格/百萬token |
-|---------|---------|-------------------|
-| 純文字 | DeepSeek V3.2 | $0.25 |
-| 圖片 | Gemini 3.1 Flash Lite | $0.25 |
-| 音訊 | Gemini 3.1 Flash Lite | $0.075 |
-| 混合/複雜 | Gemini 3.1 Pro | $2.00 |
-
-## 技術棧
-
-| 層級 | 技術 |
-|------|------|
-| Web 框架 | FastAPI + Uvicorn |
-| AI 引擎 | OpenRouter API（OpenAI SDK 相容） |
-| 多模態 | 圖片辨識 + 音訊辨識（Gemini） |
-| LINE 整合 | LINE Messaging API v3 |
-| 資料寫入 | Notion API |
-| 資料驗證 | Pydantic v2 |
-| 影片提取 | yt-dlp（1000+ 影片站點） |
-| 網頁爬取 | httpx + BeautifulSoup |
-| 部署 | Railway |
-| 語言 | Python 3.11+ |
-
-## 專案結構
+Lorekeeper is a fully-async pipeline that ingests messages from a chat **source**,
+uses a multimodal LLM to extract *complete knowledge points* (not just a summary),
+and writes the result to one or more knowledge **sinks**. Sources, sinks, and the
+LLM are swappable from config — the core pipeline depends only on interfaces.
 
 ```
-├── app/
-│   ├── main.py              # FastAPI 應用程式入口
-│   ├── config.py            # 環境變數與模型路由設定
-│   ├── webhook/handler.py   # LINE Webhook 驗證與路由
-│   ├── models/message.py    # 資料模型（含媒體內容）
-│   ├── pipeline/
-│   │   ├── parser.py        # 訊息解析、URL 爬取、媒體下載
-│   │   ├── aggregator.py    # 即時聚合（3 秒防抖）
-│   │   ├── classifier.py    # AI 多模態分類與知識點整理
-│   │   └── writer.py        # Notion 寫入（含速率限制）
-│   └── services/
-│       ├── ai_service.py    # OpenRouter API 封裝（文字+多模態）
-│       ├── url_fetcher.py   # URL 內容爬取（yt-dlp 影片 + 一般網頁）
-│       └── line_notify.py   # LINE 推播通知（群組回覆+管理員通知）
-├── Dockerfile
-├── pyproject.toml
-└── architecture.md          # 詳細技術架構文件
+ source ───▶ enrich ───▶ aggregate ───▶ classify ───▶ sink(s)
+ (LINE)      (crawl       (debounce      (multimodal   (Notion /
+             URLs)        bursts)        LLM routing)   Markdown)
 ```
 
-## 快速開始
+> Want to see it work in 30 seconds with no accounts? → [`lorekeeper demo`](#quickstart).
 
-### 1. 安裝
+---
+
+## Why this design
+
+The interesting part isn't "a LINE bot that writes to Notion" — it's that **none of
+the core code knows about LINE or Notion**. The pipeline depends only on three
+Protocols (`lorekeeper/ports.py`):
+
+| Port | Responsibility | Adapters shipped |
+|------|----------------|------------------|
+| `MessageSource` (via a `MessageHandler`) | produce normalized `InboundMessage`s | LINE webhook |
+| `LLMProvider` | classify + extract knowledge | OpenRouter, **Mock** (no key) |
+| `KnowledgeSink` | persist a `KnowledgeEntry` | Notion, **Markdown** (no account) |
+
+This **ports & adapters (hexagonal)** layout buys three concrete things:
+
+1. **Swap integrations from config** — `SINKS=["markdown"]`, `LLM_PROVIDER=mock`, no code change.
+2. **Run with zero credentials** — the Mock LLM + Markdown sink make the whole flow runnable and testable locally (that's how CI exercises it).
+3. **Extend in a few lines** — add a `TelegramSource` or `ObsidianSink` without touching the pipeline.
+
+```
+            ┌──────────────────────── core (no vendor imports) ───────────────────────┐
+ LINE  ─────▶  MessageHandler ─▶ Enricher ─▶ Aggregator ─▶ Orchestrator ─▶ KnowledgeSink ───▶ Notion
+ webhook │                                                    │     ▲                     └▶ Markdown
+         │                                              Classifier  │
+         │                                                    ▼     │
+         └──────────────────────────────────────────  LLMProvider (OpenRouter / Mock)
+                         adapters ◀────── depend on ──────▶ ports ◀────── implement ────── adapters
+```
+
+---
+
+## Quickstart
 
 ```bash
-git clone https://github.com/kiresakura/LineBotSummarizer.git
-cd LineBotSummarizer
-pip install .
+git clone https://github.com/kiresakura/lorekeeper.git
+cd lorekeeper
+pip install -e ".[dev]"
 ```
 
-### 2. 設定環境變數
+**See it run with no credentials** (Mock LLM → Markdown):
 
 ```bash
-cp .env.example .env
-# 編輯 .env 填入各項 API Key
+lorekeeper demo            # writes a knowledge entry to ./knowledge/*.md
 ```
 
-### 3. 啟動
+**Run for real** (LINE source → Notion sink → OpenRouter):
 
 ```bash
-# 本機開發
-uvicorn app.main:app --reload --port 8000
-
-# Docker
-docker build -t linebot-summarizer .
-docker run -p 8000:8000 --env-file .env linebot-summarizer
+cp .env.example .env       # fill in LINE / Notion / OpenRouter keys
+lorekeeper serve           # or: uvicorn lorekeeper.app:app --port 8000
 ```
 
-### 4. 設定 LINE Webhook
+Then point your LINE channel's Webhook URL at `https://your-host/webhook`.
 
-將 `https://your-domain.com/webhook` 填入 LINE Developers Console 的 Webhook URL。
+---
 
-## 處理流程
+## Features
 
-1. **接收** — LINE 群組訊息觸發 Webhook，HMAC-SHA256 驗簽
-2. **解析** — 提取文字內容、爬取 URL（YouTube 字幕 / BiliBili / 一般網頁）、下載圖片/音訊
-3. **聚合** — 3 秒防抖機制，連發訊息自動合併為一批
-4. **回饋** — 立即發送「開始整理」通知 + 觸發 Loading 動畫，讓使用者知道機器人正在工作
-5. **路由** — 偵測批次中的媒體類型，自動選擇最適合的 AI 模型
-6. **整理** — AI 完整提取所有知識點，含分類、重要性、標籤、待辦事項
-7. **寫入** — Token Bucket 速率限制下寫入 Notion，含重試與退避機制
-8. **完成** — 回覆群組確認已寫入，錯誤時私訊管理員
+- **Multimodal extraction** — text, images, and audio in one batch; per-modality model routing.
+- **Cost-aware model routing** — cheap models for text/vision, a stronger model only for mixed/complex batches (configurable).
+- **Full knowledge extraction, not summaries** — the prompt is tuned to preserve every detail, code block, and step.
+- **Smart aggregation** — per-conversation debounce so a burst of messages becomes one coherent entry.
+- **SSRF-hardened URL crawling** — yt-dlp (1000+ video sites) + BeautifulSoup, behind a fetch guard that blocks private/loopback/cloud-metadata targets and caps response size.
+- **Resilient Notion writes** — token-bucket rate limiting (2.5 req/s) + exponential-backoff retries, respecting Notion's 100-block / 2000-char limits.
+- **Fan-out to multiple sinks** — write the same entry to Notion *and* local Markdown at once.
 
-## AI 分類維度
+## Extending it
 
-| 維度 | 選項 |
-|------|------|
-| **分類** | 技術分享、新聞資訊、工具推薦、問題討論、學習資源、專案更新、靈感想法、其他 |
-| **重要性** | 🔴 高（關鍵決策）、🟡 中（有討論價值）、🟢 低（一般閒聊）、噪音（過濾） |
+Adding a sink is implementing one method (this is the entire contract):
 
-## 環境變數
+```python
+# lorekeeper/adapters/jsonl_sink.py
+import json
+from pathlib import Path
+from lorekeeper.models import KnowledgeEntry
 
-| 變數 | 說明 |
-|------|------|
-| `LINE_CHANNEL_SECRET` | LINE Channel Secret |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Channel Access Token |
-| `NOTION_API_KEY` | Notion Integration Token |
-| `NOTION_DATABASE_ID` | 主資料庫 ID |
-| `NOTION_DIGEST_DATABASE_ID` | 每日摘要資料庫 ID |
-| `OPENROUTER_API_KEY` | OpenRouter API Key |
-| `ADMIN_LINE_USER_ID` | 管理員 LINE User ID（錯誤通知用） |
-| `AI_MODEL_TEXT` | 純文字模型（預設: deepseek/deepseek-v3.2） |
-| `AI_MODEL_VISION` | 圖片模型（預設: gemini-3.1-flash-lite） |
-| `AI_MODEL_AUDIO` | 音訊模型（預設: gemini-3.1-flash-lite） |
-| `AI_MODEL_COMPLEX` | 複雜/混合模型（預設: gemini-3-pro） |
+class JsonlSink:
+    name = "jsonl"
 
-## 預估成本
+    def __init__(self, path: str = "./knowledge.jsonl"):
+        self.path = Path(path)
 
-| 項目 | 月費 |
-|------|------|
-| OpenRouter API | ~NT$15-50 |
-| 部署主機 (Railway) | NT$0-150 |
-| Notion / LINE API | 免費 |
-| **合計** | **< NT$200/月** |
+    async def write(self, entry: KnowledgeEntry) -> None:
+        line = entry.model_dump_json(exclude={"source_messages"})
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+```
 
-## 安全性
+Register it in `lorekeeper/app.py:build_sinks` and set `SINKS=["jsonl"]`. The pipeline
+is untouched.
 
-- **Webhook 驗章**：受 LINE HMAC-SHA256 簽章驗證保護，`LINE_CHANNEL_SECRET` 不可留空（留空時一律拒絕請求）。
-- **SSRF 防護**：URL 爬取走 `app/services/safe_http.py` — scheme 白名單、封鎖私有/內網/loopback/雲端 metadata 位址、逐跳重新驗證重導、限制回應大小。
-- **金鑰管理**：所有金鑰僅由環境變數注入；**請勿** commit `.env` 或將其放入 Docker image（已由 `.gitignore` / `.dockerignore` 排除）。
-- 漏洞回報請見 [`SECURITY.md`](SECURITY.md)。
+---
 
-## 隱私
+## Configuration
 
-本服務會擷取 LINE 群組成員的訊息、圖片、語音，並送往第三方 AI 服務（OpenRouter）分析後寫入 Notion。
-**自行部署前，請取得群組成員的知情同意，並評估當地個資法規（如台灣《個人資料保護法》），以及各 AI 供應商的資料留存政策。**
+All via environment variables (see [`.env.example`](.env.example)):
 
-## 授權
+| Variable | Purpose |
+|----------|---------|
+| `SOURCE` | message source (`line`) |
+| `SINKS` | JSON list of sinks: `["notion"]`, `["markdown"]`, `["notion","markdown"]` |
+| `LLM_PROVIDER` | `openrouter` (real) or `mock` (no key, for local/CI) |
+| `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API |
+| `ADMIN_LINE_USER_ID` | optional — recipient of error alerts |
+| `NOTION_API_KEY` / `NOTION_DATABASE_ID` | Notion sink |
+| `MARKDOWN_OUTPUT_DIR` | Markdown sink output dir (default `./knowledge`) |
+| `OPENROUTER_API_KEY` | OpenRouter key; `AI_MODEL_*` override the routing |
+| `COOLDOWN_SECONDS` / `MAX_BATCH_SIZE` | aggregation tuning |
+| `NOISE_FILTER_ENABLED` | drop "noise"-rated batches |
 
-本專案採用 [MIT License](LICENSE)。
+**Notion DB schema** (sink expects these properties): `Title` (title), `Category` (select),
+`Importance` (select), `Tags` (multi-select), `Source` (select), `Date` (date),
+`Knowledge` (rich text), `Has Action Items` (checkbox), `URLs` (url).
+
+---
+
+## Project layout
+
+```
+lorekeeper/
+├── ports.py            # the 3 Protocols the pipeline depends on (framework-free)
+├── models.py           # provider-neutral domain models
+├── config.py           # settings + adapter selection
+├── app.py              # composition root: wires adapters from config
+├── cli.py              # `lorekeeper demo` / `serve`
+├── pipeline/           # enricher → aggregator → classifier → orchestrator
+├── adapters/           # LINE, Notion, Markdown, OpenRouter, Mock — the only vendor code
+└── services/           # safe_http (SSRF guard), url_fetcher
+tests/                  # 29 tests: pure logic, SSRF guard, debounce, classifier, DI/webhook
+```
+
+## Testing
+
+```bash
+pytest            # 29 tests, no network or credentials required
+ruff check . && ruff format --check .
+```
+
+The suite leans on the Mock LLM and pure converters, so it runs offline and
+deterministically. CI (GitHub Actions) runs lint + a [gitleaks](.github/workflows/secret-scan.yml)
+secret scan on every push.
+
+## Security & privacy
+
+- Webhook requests are verified with HMAC-SHA256 and **fail closed** if the secret is unset.
+- URL crawling is SSRF-guarded (`lorekeeper/services/safe_http.py`).
+- Secrets are env-only; `.env` and `.git` are kept out of the Docker image via `.dockerignore`.
+- The bot processes third-party chat content — operators must obtain member consent and
+  review local privacy law. See [`SECURITY.md`](SECURITY.md).
+
+## Deployment
+
+```bash
+docker build -t lorekeeper .
+docker run -p 8000:8000 --env-file .env lorekeeper   # runs as a non-root user
+```
+
+Deploys cleanly to Railway / Render / any container host. Estimated cost for a
+moderately active group: **< NT$200/month** (OpenRouter usage + a small host;
+Notion & LINE free tiers).
+
+## License
+
+[MIT](LICENSE) © kiresakura

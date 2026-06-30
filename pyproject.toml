@@ -1,18 +1,29 @@
 [project]
-name = "linebot-notion-kb"
-version = "0.1.0"
-description = "LINE Bot 群組訊息 → AI 分類 → Notion 知識庫"
+name = "lorekeeper"
+version = "0.2.0"
+description = "Turn group chats into a structured knowledge base — a pluggable, fully-async LLM pipeline"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+authors = [{ name = "kiresakura" }]
+keywords = [
+    "llm",
+    "knowledge-base",
+    "notion",
+    "line-bot",
+    "fastapi",
+    "async",
+    "ports-and-adapters",
+    "hexagonal-architecture",
+]
 dependencies = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",
-    "line-bot-sdk>=3.0",
     "notion-client>=2.0",
     "openai>=1.0",
     "httpx>=0.25",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    "apscheduler>=3.10",
     "beautifulsoup4>=4.12",
     "yt-dlp>=2024.0",
 ]
@@ -24,6 +35,20 @@ dev = [
     "ruff>=0.1",
 ]
 
+[project.scripts]
+lorekeeper = "lorekeeper.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["lorekeeper*"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

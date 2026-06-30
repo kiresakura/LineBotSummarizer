@@ -14,7 +14,7 @@
 
 - **金鑰管理**：所有金鑰僅透過環境變數注入，**切勿** commit `.env` 或將其放入 Docker image。
 - **網路存取（SSRF）**：本服務會抓取使用者貼出的 URL。程式已內建私有網段封鎖
-  （見 `app/services/safe_http.py`），但仍建議在部署環境施加 egress 網路政策作為縱深防禦。
+  （見 `lorekeeper/services/safe_http.py`），但仍建議在部署環境施加 egress 網路政策作為縱深防禦。
 - **個資 / 合規**：擷取群組成員訊息、圖片、語音前，請取得成員**知情同意**，
   並評估當地個資法規（如台灣《個人資料保護法》）。AI 供應商的資料留存政策亦需確認。
 - **存取控制**：Webhook 端點受 LINE 簽章驗證保護；請勿停用，且 `LINE_CHANNEL_SECRET` 不可留空。

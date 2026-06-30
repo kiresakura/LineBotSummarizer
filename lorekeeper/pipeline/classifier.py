@@ -1,16 +1,28 @@
-"""Stage 3: AI 分類 & 摘要引擎（支援多模態）"""
+"""Pipeline stage 3 — AI classification & full knowledge extraction (multimodal).
+
+Extracts *complete* knowledge points (not a summary) from a batch, routing to an
+appropriate model via the injected `LLMProvider`. Provider-neutral: it never
+imports an SDK, only `lorekeeper.ports`.
+"""
 
 import json
-import re
 import logging
-from app.models.message import RawMessage, ClassifiedMessage, Importance, MessageType
-from app.services.ai_service import AIService, ContentType
+import re
+
+from lorekeeper.models import (
+    Importance,
+    InboundMessage,
+    KnowledgeEntry,
+    MediaPayload,
+    MessageType,
+)
+from lorekeeper.ports import ContentType, LLMProvider
 
 logger = logging.getLogger(__name__)
 
 URL_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+', re.IGNORECASE)
 
-CLASSIFICATION_PROMPT = """你是一個 LINE 群組知識庫整理助手。請分析以下一批訊息，完整提取所有知識點並回傳 JSON。
+CLASSIFICATION_PROMPT = """你是一個群組知識庫整理助手。請分析以下一批訊息，完整提取所有知識點並回傳 JSON。
 
 ## 分類規則
 
@@ -29,7 +41,6 @@ CLASSIFICATION_PROMPT = """你是一個 LINE 群組知識庫整理助手。請�
    - 使用清晰的結構化格式（標題、子項目、條列式）
    - 保留具體的數據、名詞、技術術語、版本號等細節
    - 如有程式碼片段，完整保留
-   - 如有步驟說明，完整保留每一步
    - 長度不限，寧可冗餘也不要遺漏
    - 目標：讓讀者不需要回去看原始訊息，就能獲得完整的知識
 
@@ -46,7 +57,7 @@ CLASSIFICATION_PROMPT = """你是一個 LINE 群組知識庫整理助手。請�
 
 ## 訊息內容
 
-群組 ID：{group_id}
+對話 ID：{conversation_id}
 時間範圍：{time_range}
 
 {formatted_messages}
@@ -82,181 +93,142 @@ MULTIMODAL_ADDENDUM = """
 
 
 class MessageClassifier:
-    """使用 AI 對聚合後的訊息進行分類與摘要（支援圖片/音訊）"""
-
-    def __init__(self):
-        self.ai = AIService()
+    def __init__(self, llm: LLMProvider):
+        self.llm = llm
 
     async def classify(
-        self, group_id: str, messages: list[RawMessage]
-    ) -> ClassifiedMessage | None:
-        """對一批訊息進行 AI 分類"""
+        self, conversation_id: str, messages: list[InboundMessage]
+    ) -> KnowledgeEntry | None:
         formatted = self._format_messages(messages)
-        time_range = self._get_time_range(messages)
+        time_range = self._time_range(messages)
+        media = [m.media for m in messages if m.has_media and m.media is not None]
+        content_type = self._content_type(media)
 
-        # 偵測媒體內容
-        media_items = self._extract_media(messages)
-        content_type = self._determine_content_type(media_items)
-
-        # 收集 URL 爬取內容
-        url_content_text = self._format_url_contents(messages)
-
-        # 組合 prompt
         prompt = CLASSIFICATION_PROMPT.format(
-            group_id=group_id,
+            conversation_id=conversation_id,
             time_range=time_range,
             formatted_messages=formatted,
         )
 
-        if url_content_text:
-            prompt += url_content_text
+        url_text = self._format_url_contents(messages)
+        if url_text:
+            prompt += url_text
 
-        if media_items:
-            media_type_names = set(item["type"] for item in media_items)
+        if media:
+            kinds = {"image" if m.is_image else "audio" for m in media}
             prompt += MULTIMODAL_ADDENDUM.format(
-                media_count=len(media_items),
+                media_count=len(media),
                 media_types="、".join(
-                    "圖片" if t == "image" else "音訊" for t in media_type_names
+                    "圖片" if k == "image" else "音訊" for k in kinds
                 ),
             )
 
-        # 呼叫 AI（增大 token 上限以保留完整內容）
-        max_tokens = 4096 if media_items else 2048
+        max_tokens = 4096 if media else 2048
         try:
-            if media_items:
-                response = await self.ai.complete_multimodal(
-                    text_prompt=prompt,
-                    media_items=media_items,
-                    content_type=content_type,
-                    max_tokens=max_tokens,
+            if media:
+                response = await self.llm.complete_multimodal(
+                    prompt, media, content_type=content_type, max_tokens=max_tokens
                 )
             else:
-                response = await self.ai.complete(
-                    prompt,
-                    content_type=content_type,
-                    max_tokens=max_tokens,
+                response = await self.llm.complete(
+                    prompt, content_type=content_type, max_tokens=max_tokens
                 )
 
             result = self._parse_response(response)
             if result is None:
                 return None
 
-            # 提取 URL
-            urls = []
+            urls: list[str] = []
             for msg in messages:
                 if msg.text:
                     urls.extend(URL_PATTERN.findall(msg.text))
 
-            return ClassifiedMessage(
+            return KnowledgeEntry(
                 category=result.get("category", "其他"),
-                importance=Importance(result.get("importance", "low")),
+                importance=self._parse_importance(result.get("importance")),
                 title=result.get("title", ""),
-                summary=result.get("knowledge_points", ""),
+                knowledge=result.get("knowledge_points", ""),
                 media_descriptions=result.get("media_descriptions", []),
                 tags=result.get("tags", []),
                 action_items=result.get("action_items", []),
-                original_messages=messages,
-                group_name=group_id,
-                urls_found=urls,
+                source_messages=messages,
+                conversation_label=conversation_id,
+                urls=urls,
             )
-
         except Exception as e:
             logger.error(f"AI 分類失敗: {e}", exc_info=True)
             return None
 
-    def _format_url_contents(self, messages: list[RawMessage]) -> str:
-        """將爬取的 URL 內容格式化為 AI 可讀文字"""
-        all_contents = []
-        for msg in messages:
-            for uc in msg.url_contents:
-                all_contents.append(uc)
+    # --- helpers ---
 
-        if not all_contents:
+    @staticmethod
+    def _parse_importance(value: str | None) -> Importance:
+        try:
+            return Importance(value)
+        except (ValueError, TypeError):
+            return Importance.LOW
+
+    def _format_url_contents(self, messages: list[InboundMessage]) -> str:
+        contents = [uc for msg in messages for uc in msg.url_contents]
+        if not contents:
             return ""
-
         parts = ["\n\n## 連結內容（已爬取）\n"]
-        for i, uc in enumerate(all_contents, 1):
-            parts.append(f"### 連結 {i}: {uc['title']}")
-            parts.append(f"URL: {uc['url']}")
-            parts.append(uc["content"])
+        for i, uc in enumerate(contents, 1):
+            parts.append(f"### 連結 {i}: {uc.title}")
+            parts.append(f"URL: {uc.url}")
+            parts.append(uc.content)
             parts.append("")
-
         parts.append(
             "請根據以上連結內容進行深入統整，完整提取所有知識點，不要省略任何細節。"
         )
         return "\n".join(parts)
 
-    def _extract_media(self, messages: list[RawMessage]) -> list[dict]:
-        """從批次訊息中提取已下載的媒體"""
-        media_items = []
-        for msg in messages:
-            if not msg.has_media:
-                continue
-            if msg.message_type == MessageType.IMAGE:
-                media_items.append(
-                    {
-                        "type": "image",
-                        "data": msg.media_content,
-                        "mime_type": msg.media_mime_type or "image/jpeg",
-                    }
-                )
-            elif msg.message_type == MessageType.AUDIO:
-                media_items.append(
-                    {
-                        "type": "audio",
-                        "data": msg.media_content,
-                        "mime_type": msg.media_mime_type or "audio/m4a",
-                    }
-                )
-        return media_items
-
-    def _determine_content_type(self, media_items: list[dict]) -> ContentType:
-        """根據媒體類型決定模型路由"""
-        if not media_items:
+    @staticmethod
+    def _content_type(media: list[MediaPayload]) -> ContentType:
+        if not media:
             return ContentType.TEXT
-        types = set(item["type"] for item in media_items)
-        if types == {"image"}:
+        kinds = {"image" if m.is_image else "audio" for m in media}
+        if kinds == {"image"}:
             return ContentType.IMAGE
-        elif types == {"audio"}:
+        if kinds == {"audio"}:
             return ContentType.AUDIO
-        else:
-            return ContentType.COMPLEX
+        return ContentType.COMPLEX
 
-    def _format_messages(self, messages: list[RawMessage]) -> str:
-        """將訊息格式化為 AI 可讀的文字"""
+    @staticmethod
+    def _format_messages(messages: list[InboundMessage]) -> str:
         lines = []
         for msg in messages:
             time_str = msg.timestamp.strftime("%H:%M")
-            sender = msg.user_name or msg.user_id[:8]
+            sender = msg.sender_name or msg.sender_id[:8]
             if msg.text:
                 content = msg.text
-            elif msg.message_type == MessageType.IMAGE:
+            elif msg.type == MessageType.IMAGE:
                 content = "[圖片" + ("，已附加供分析" if msg.has_media else "") + "]"
-            elif msg.message_type == MessageType.AUDIO:
+            elif msg.type == MessageType.AUDIO:
                 content = "[音訊" + ("，已附加供分析" if msg.has_media else "") + "]"
             else:
-                content = f"[{msg.message_type.value}]"
+                content = f"[{msg.type.value}]"
             lines.append(f"[{time_str}] {sender}: {content}")
         return "\n".join(lines)
 
-    def _get_time_range(self, messages: list[RawMessage]) -> str:
-        """取得訊息的時間範圍"""
+    @staticmethod
+    def _time_range(messages: list[InboundMessage]) -> str:
         if not messages:
             return "N/A"
         start = min(m.timestamp for m in messages)
         end = max(m.timestamp for m in messages)
         return f"{start.strftime('%Y-%m-%d %H:%M')} ~ {end.strftime('%H:%M')}"
 
-    def _parse_response(self, response: str) -> dict | None:
-        """解析 AI 回傳的 JSON"""
+    @staticmethod
+    def _parse_response(response: str) -> dict | None:
         try:
             return json.loads(response)
-        except json.JSONDecodeError:
-            match = re.search(r"```(?:json)?\s*(.*?)\s*```", response, re.DOTALL)
+        except (json.JSONDecodeError, TypeError):
+            match = re.search(r"```(?:json)?\s*(.*?)\s*```", response or "", re.DOTALL)
             if match:
                 try:
                     return json.loads(match.group(1))
                 except json.JSONDecodeError:
                     pass
-            logger.error(f"無法解析 AI 回應: {response[:200]}")
+            logger.error(f"無法解析 AI 回應: {str(response)[:200]}")
             return None

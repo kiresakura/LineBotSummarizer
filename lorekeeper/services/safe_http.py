@@ -1,7 +1,6 @@
 """SSRF-safe HTTP 取得工具。
 
-對所有「使用者提供之 URL」發出的請求(網頁爬取、字幕下載、LINE 媒體下載）
-都應走這裡。功能：
+對所有「使用者提供之 URL」發出的請求（網頁爬取、字幕下載、媒體下載）都應走這裡：
 
 1. scheme 白名單（僅 http/https）、拒絕內嵌帳密的 URL
 2. 解析 DNS 後封鎖私有 / loopback / link-local / 保留 / 雲端 metadata 等非公開位址
@@ -9,9 +8,8 @@
 4. 串流下載並限制回應大小（防記憶體 DoS）
 5. 全域 semaphore 限制同時對外請求數（避免被當成放大器）
 
-注意：本模組在每次請求前解析 DNS 並驗證 IP，可擋下絕大多數 SSRF 向量
-（雲端 metadata、loopback、內網、重導繞過）。DNS rebinding 仍有殘餘風險，
-正式環境建議搭配網路層 egress 政策作為縱深防禦。
+注意：每次請求前解析 DNS 並驗證 IP，可擋下絕大多數 SSRF 向量。DNS rebinding 仍有
+殘餘風險，正式環境建議搭配網路層 egress 政策作為縱深防禦。
 """
 
 import asyncio
