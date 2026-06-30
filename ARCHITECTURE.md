@@ -6,8 +6,8 @@ the [README](README.md).
 ## Data flow
 
 ```
-LINE webhook
-   │  verify HMAC signature, normalize event, download media
+source webhook (LINE / Telegram)
+   │  verify signature/secret, normalize event, download media
    ▼
 InboundMessage ──▶ Enricher ──▶ Aggregator ──▶ Orchestrator ──▶ Sink(s)
                    crawl URLs    debounce per     classify +       Notion /
@@ -29,8 +29,8 @@ the pipeline never depends outward.
 
 ```
 adapters/ ──implements──▶ ports.py ◀──depends on── pipeline/
-(LINE, Notion, Markdown,                            (enricher, aggregator,
- OpenRouter, Mock)                                   classifier, orchestrator)
+(LINE, Telegram, Notion,                            (enricher, aggregator,
+ Markdown, OpenRouter, Mock)                         classifier, orchestrator)
 ```
 
 `app.py` is the single composition root: it reads `Settings`, picks adapters by
@@ -68,6 +68,7 @@ The most logic-dense, pure pieces get the most tests:
 - `aggregator` — debounce/flush timing and conversation isolation.
 - `classifier` — JSON / fenced-JSON parsing, enum fallback, URL extraction (fake LLM).
 - `app` — DI wiring, `/health`, webhook signature rejection (FastAPI TestClient).
+- `telegram` — secret-token auth + Update → `InboundMessage` normalization.
 
 Everything runs offline via the Mock provider — no network, no credentials.
 
@@ -75,7 +76,7 @@ Everything runs offline via the Mock provider — no network, no credentials.
 
 Natural next steps, in rough priority order:
 
-1. **More adapters** — `TelegramSource`, `ObsidianSink` / `JsonlSink` (proves the seam).
+1. **More adapters** — `DiscordSource` / `SlackSource`, `ObsidianSink` / `JsonlSink` (LINE + Telegram already prove the source seam).
 2. **Durable queue** — swap in-memory aggregation for Redis/SQS to scale out and survive restarts.
 3. **Idempotency / de-dup** — persist processed message ids (LINE may redeliver).
 4. **Daily digest** — scheduled roll-up of a conversation's entries.

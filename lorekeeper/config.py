@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     # --- adapter selection ---
-    source: str = "line"  # "line"
+    source: str = "line"  # "line" | "telegram"
     sinks: list[str] = ["notion"]  # any of: "notion", "markdown"
     llm_provider: str = "openrouter"  # "openrouter" | "mock"
 
@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     line_channel_secret: str = ""
     line_channel_access_token: str = ""
     admin_line_user_id: str = ""
+
+    # --- Telegram source / notifier ---
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    telegram_admin_chat_id: str = ""
 
     # --- Notion sink ---
     notion_api_key: str = ""

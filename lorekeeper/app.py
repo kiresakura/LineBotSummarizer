@@ -13,6 +13,11 @@ from fastapi import FastAPI
 
 from lorekeeper import __version__
 from lorekeeper.adapters.line import LineClient, LineNotifier, LineSource
+from lorekeeper.adapters.telegram import (
+    TelegramClient,
+    TelegramNotifier,
+    TelegramSource,
+)
 from lorekeeper.adapters.markdown_sink import MarkdownSink
 from lorekeeper.adapters.mock_llm import MockLLMProvider
 from lorekeeper.adapters.notifiers import NullNotifier
@@ -67,20 +72,40 @@ def build_sinks(settings: Settings) -> list[KnowledgeSink]:
     return sinks
 
 
+def _build_client_notifier(
+    settings: Settings,
+) -> tuple[LineClient | TelegramClient | None, Notifier]:
+    """Build the (client, notifier) pair for the active source."""
+    if settings.source == "line":
+        client = LineClient(
+            settings.line_channel_secret, settings.line_channel_access_token
+        )
+        return client, LineNotifier(client, settings.admin_line_user_id)
+    if settings.source == "telegram":
+        tg = TelegramClient(
+            settings.telegram_bot_token, settings.telegram_webhook_secret
+        )
+        return tg, TelegramNotifier(tg, settings.telegram_admin_chat_id)
+    logger.warning(f"未知的 source: {settings.source!r}，停用入站")
+    return None, NullNotifier()
+
+
+def _build_source_router(settings: Settings, client, handle):
+    """Return the active source's FastAPI router, or None if no inbound."""
+    if settings.source == "line" and client is not None:
+        return LineSource(client, handle).router
+    if settings.source == "telegram" and client is not None:
+        return TelegramSource(client, handle).router
+    return None
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     llm = build_llm(settings)
     sinks = build_sinks(settings)
 
-    line_client: LineClient | None = None
-    if settings.source == "line":
-        line_client = LineClient(
-            settings.line_channel_secret, settings.line_channel_access_token
-        )
-        notifier: Notifier = LineNotifier(line_client, settings.admin_line_user_id)
-    else:
-        notifier = NullNotifier()
+    client, notifier = _build_client_notifier(settings)
 
     classifier = MessageClassifier(llm)
     orchestrator = Orchestrator(
@@ -125,8 +150,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "llm": settings.llm_provider,
         }
 
-    if settings.source == "line" and line_client is not None:
-        app.include_router(LineSource(line_client, handle).router)
+    router = _build_source_router(settings, client, handle)
+    if router is not None:
+        app.include_router(router)
 
     return app
 

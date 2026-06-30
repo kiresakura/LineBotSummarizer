@@ -30,7 +30,7 @@ Protocols (`lorekeeper/ports.py`):
 
 | Port | Responsibility | Adapters shipped |
 |------|----------------|------------------|
-| `MessageSource` (via a `MessageHandler`) | produce normalized `InboundMessage`s | LINE webhook |
+| `MessageSource` (via a `MessageHandler`) | produce normalized `InboundMessage`s | LINE, Telegram |
 | `LLMProvider` | classify + extract knowledge | OpenRouter, **Mock** (no key) |
 | `KnowledgeSink` | persist a `KnowledgeEntry` | Notion, **Markdown** (no account) |
 
@@ -38,7 +38,7 @@ This **ports & adapters (hexagonal)** layout buys three concrete things:
 
 1. **Swap integrations from config** — `SINKS=["markdown"]`, `LLM_PROVIDER=mock`, no code change.
 2. **Run with zero credentials** — the Mock LLM + Markdown sink make the whole flow runnable and testable locally (that's how CI exercises it).
-3. **Extend in a few lines** — add a `TelegramSource` or `ObsidianSink` without touching the pipeline.
+3. **Extend in a few lines** — a second source (`TelegramSource`) and a second sink (`MarkdownSink`) already ship as proof; adding more doesn't touch the pipeline.
 
 ```
             ┌──────────────────────── core (no vendor imports) ───────────────────────┐
@@ -120,10 +120,11 @@ All via environment variables (see [`.env.example`](.env.example)):
 
 | Variable | Purpose |
 |----------|---------|
-| `SOURCE` | message source (`line`) |
+| `SOURCE` | message source: `line` or `telegram` |
 | `SINKS` | JSON list of sinks: `["notion"]`, `["markdown"]`, `["notion","markdown"]` |
 | `LLM_PROVIDER` | `openrouter` (real) or `mock` (no key, for local/CI) |
-| `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API |
+| `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API (when `SOURCE=line`) |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` | Telegram Bot API (when `SOURCE=telegram`) |
 | `ADMIN_LINE_USER_ID` | optional — recipient of error alerts |
 | `NOTION_API_KEY` / `NOTION_DATABASE_ID` | Notion sink |
 | `MARKDOWN_OUTPUT_DIR` | Markdown sink output dir (default `./knowledge`) |
@@ -147,7 +148,7 @@ lorekeeper/
 ├── app.py              # composition root: wires adapters from config
 ├── cli.py              # `lorekeeper demo` / `serve`
 ├── pipeline/           # enricher → aggregator → classifier → orchestrator
-├── adapters/           # LINE, Notion, Markdown, OpenRouter, Mock — the only vendor code
+├── adapters/           # LINE, Telegram, Notion, Markdown, OpenRouter, Mock — the only vendor code
 └── services/           # safe_http (SSRF guard), url_fetcher
 tests/                  # 29 tests: pure logic, SSRF guard, debounce, classifier, DI/webhook
 ```
