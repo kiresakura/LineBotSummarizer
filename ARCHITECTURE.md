@@ -29,8 +29,8 @@ the pipeline never depends outward.
 
 ```
 adapters/ ──implements──▶ ports.py ◀──depends on── pipeline/
-(LINE, Telegram, Notion,                            (enricher, aggregator,
- Markdown, OpenRouter, Mock)                         classifier, orchestrator)
+(LINE, Telegram, Notion, Markdown,                  (enricher, aggregator,
+ JSONL, OpenRouter, Mock)                            classifier, orchestrator)
 ```
 
 `app.py` is the single composition root: it reads `Settings`, picks adapters by
@@ -76,7 +76,7 @@ Everything runs offline via the Mock provider — no network, no credentials.
 
 Natural next steps, in rough priority order:
 
-1. **More adapters** — `DiscordSource` / `SlackSource`, `ObsidianSink` / `JsonlSink` (LINE + Telegram already prove the source seam).
+1. **More adapters** — `DiscordSource` / `SlackSource`, `ObsidianSink` (each seam already ships 2–3 adapters as proof).
 2. **Durable queue** — swap in-memory aggregation for Redis/SQS to scale out and survive restarts.
 3. **Idempotency / de-dup** — persist processed message ids (LINE may redeliver).
 4. **Daily digest** — scheduled roll-up of a conversation's entries.

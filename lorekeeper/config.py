@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # --- Markdown sink ---
     markdown_output_dir: str = "./knowledge"
 
+    # --- JSONL sink ---
+    jsonl_output_path: str = "./knowledge.jsonl"
+
     # --- OpenRouter LLM ---
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"

@@ -18,6 +18,7 @@ from lorekeeper.adapters.telegram import (
     TelegramNotifier,
     TelegramSource,
 )
+from lorekeeper.adapters.jsonl_sink import JsonlSink
 from lorekeeper.adapters.markdown_sink import MarkdownSink
 from lorekeeper.adapters.mock_llm import MockLLMProvider
 from lorekeeper.adapters.notifiers import NullNotifier
@@ -64,6 +65,8 @@ def build_sinks(settings: Settings) -> list[KnowledgeSink]:
             )
         elif name == "markdown":
             sinks.append(MarkdownSink(settings.markdown_output_dir))
+        elif name == "jsonl":
+            sinks.append(JsonlSink(settings.jsonl_output_path))
         else:
             logger.warning(f"未知的 sink: {name!r}，已略過")
     if not sinks:
