@@ -17,7 +17,7 @@ keywords = [
     "hexagonal-architecture",
 ]
 dependencies = [
-    "fastapi>=0.100",
+    "fastapi>=0.139.0",
     "uvicorn[standard]>=0.23",
     "notion-client>=2.0",
     "openai>=2.44.0",
