@@ -12,18 +12,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from lorekeeper import __version__
-from lorekeeper.adapters.line import LineClient, LineNotifier, LineSource
-from lorekeeper.adapters.telegram import (
-    TelegramClient,
-    TelegramNotifier,
-    TelegramSource,
-)
 from lorekeeper.adapters.jsonl_sink import JsonlSink
+from lorekeeper.adapters.line import LineClient, LineNotifier, LineSource
 from lorekeeper.adapters.markdown_sink import MarkdownSink
 from lorekeeper.adapters.mock_llm import MockLLMProvider
 from lorekeeper.adapters.notifiers import NullNotifier
 from lorekeeper.adapters.notion_sink import NotionSink
 from lorekeeper.adapters.openrouter_llm import OpenRouterProvider
+from lorekeeper.adapters.telegram import (
+    TelegramClient,
+    TelegramNotifier,
+    TelegramSource,
+)
 from lorekeeper.config import Settings, get_settings
 from lorekeeper.models import InboundMessage
 from lorekeeper.pipeline.aggregator import MessageAggregator

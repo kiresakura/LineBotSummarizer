@@ -1,7 +1,7 @@
 """JSONL sink — append behaviour and serialization."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from lorekeeper.adapters.jsonl_sink import JsonlSink
 from lorekeeper.models import (
@@ -19,7 +19,7 @@ def _entry() -> KnowledgeEntry:
         sender_id="u",
         type=MessageType.TEXT,
         text="hi",
-        timestamp=datetime(2026, 1, 1, 9, 0),
+        timestamp=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
     )
     return KnowledgeEntry(
         category="工具推薦",

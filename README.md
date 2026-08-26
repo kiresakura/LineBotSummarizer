@@ -99,6 +99,7 @@ import asyncio
 from pathlib import Path
 from lorekeeper.models import KnowledgeEntry
 
+
 class JsonlSink:
     name = "jsonl"
 
@@ -167,8 +168,8 @@ ruff check . && ruff format --check .
 ```
 
 The suite leans on the Mock LLM and pure converters, so it runs offline and
-deterministically. CI (GitHub Actions) runs lint + a [gitleaks](.github/workflows/secret-scan.yml)
-secret scan on every push.
+deterministically. CI (GitHub Actions) runs lint, the test suite, and a
+[gitleaks](.github/workflows/secret-scan.yml) secret scan on every push.
 
 ## Security & privacy
 

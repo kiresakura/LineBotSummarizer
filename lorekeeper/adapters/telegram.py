@@ -11,7 +11,7 @@ The pipeline is untouched — only `app.py` learns the new `SOURCE=telegram` val
 import asyncio
 import hmac
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -117,8 +117,8 @@ class TelegramSource:
             inbound = await self._to_inbound(message)
             if inbound:
                 await self.on_message(inbound)
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"處理 Telegram 訊息失敗: {e}", exc_info=True)
+        except Exception:
+            logger.exception("處理 Telegram 訊息失敗")
 
     async def _to_inbound(self, m: dict) -> InboundMessage | None:
         msg_type, text, file_id = self._classify(m)
@@ -140,7 +140,7 @@ class TelegramSource:
             sender_name=sender_name,
             type=msg_type,
             text=text,
-            timestamp=datetime.fromtimestamp(m.get("date", 0)),
+            timestamp=datetime.fromtimestamp(m.get("date", 0), tz=UTC),
             media=media,
         )
 

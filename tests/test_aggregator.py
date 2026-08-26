@@ -1,7 +1,7 @@
 """Debounce / batching behaviour of the aggregator."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 from lorekeeper.models import InboundMessage, MessageType
 from lorekeeper.pipeline.aggregator import MessageAggregator
@@ -14,7 +14,7 @@ def _msg(i: int, conversation: str = "c1") -> InboundMessage:
         sender_id="u",
         type=MessageType.TEXT,
         text=f"m{i}",
-        timestamp=datetime(2026, 1, 1, 0, 0, min(i, 59)),
+        timestamp=datetime(2026, 1, 1, 0, 0, min(i, 59), tzinfo=UTC),
     )
 
 

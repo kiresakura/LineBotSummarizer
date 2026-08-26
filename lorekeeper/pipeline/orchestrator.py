@@ -46,8 +46,8 @@ class Orchestrator:
             if written:
                 await self._notify_done(conversation_id, batch, entry, written)
 
-        except Exception as e:  # noqa: BLE001 — top-level batch guard
-            logger.error(f"處理批次失敗: {e}", exc_info=True)
+        except Exception as e:  # top-level batch guard
+            logger.exception("處理批次失敗")
             await self.notifier.alert(
                 f"處理失敗\n對話: {conversation_id}\n錯誤: {str(e)[:200]}"
             )
@@ -74,8 +74,8 @@ class Orchestrator:
                     f"已寫入 {sink.name}: "
                     f"[{entry.category}] {entry.title or entry.knowledge[:40]}"
                 )
-            except Exception as e:  # noqa: BLE001 — isolate one sink's failure
-                logger.error(f"寫入 {sink.name} 失敗: {e}", exc_info=True)
+            except Exception as e:  # isolate one sink's failure
+                logger.exception(f"寫入 {sink.name} 失敗")
                 await self.notifier.alert(
                     f"寫入 {sink.name} 失敗\n對話: {conversation_id}\n"
                     f"錯誤: {str(e)[:200]}"

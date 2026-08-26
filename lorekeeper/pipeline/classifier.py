@@ -155,8 +155,8 @@ class MessageClassifier:
                 conversation_label=conversation_id,
                 urls=urls,
             )
-        except Exception as e:
-            logger.error(f"AI 分類失敗: {e}", exc_info=True)
+        except Exception:
+            logger.exception("AI 分類失敗")
             return None
 
     # --- helpers ---

@@ -7,13 +7,13 @@ from lorekeeper.config import Settings
 
 
 def _mock_settings(**overrides) -> Settings:
-    base = dict(
-        source="line",
-        sinks=["markdown"],
-        llm_provider="mock",
-        line_channel_secret="secret",
-        markdown_output_dir="./_test_out",
-    )
+    base = {
+        "source": "line",
+        "sinks": ["markdown"],
+        "llm_provider": "mock",
+        "line_channel_secret": "secret",
+        "markdown_output_dir": "./_test_out",
+    }
     base.update(overrides)
     # _env_file=None keeps tests from reading a developer's local .env
     return Settings(_env_file=None, **base)

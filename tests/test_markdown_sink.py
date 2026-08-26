@@ -1,6 +1,6 @@
 """Markdown sink — rendering and file output."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from lorekeeper.adapters.markdown_sink import MarkdownSink
 from lorekeeper.models import (
@@ -19,7 +19,7 @@ def _entry() -> KnowledgeEntry:
         sender_name="Alice",
         type=MessageType.TEXT,
         text="hi",
-        timestamp=datetime(2026, 1, 1, 9, 0),
+        timestamp=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
     )
     return KnowledgeEntry(
         category="技術分享",

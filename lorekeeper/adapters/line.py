@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -134,8 +134,8 @@ class LineSource:
             msg = await self._to_inbound(event)
             if msg:
                 await self.on_message(msg)
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"處理訊息事件失敗: {e}", exc_info=True)
+        except Exception:
+            logger.exception("處理訊息事件失敗")
 
     async def _to_inbound(self, event: dict) -> InboundMessage | None:
         source = event.get("source", {})
@@ -159,7 +159,7 @@ class LineSource:
             sender_id=source.get("userId", ""),
             type=MessageType(msg_type),
             text=text,
-            timestamp=datetime.fromtimestamp(event.get("timestamp", 0) / 1000),
+            timestamp=datetime.fromtimestamp(event.get("timestamp", 0) / 1000, tz=UTC),
             media=media,
         )
 

@@ -97,6 +97,7 @@ import asyncio
 from pathlib import Path
 from lorekeeper.models import KnowledgeEntry
 
+
 class JsonlSink:
     name = "jsonl"
 
@@ -164,7 +165,7 @@ ruff check . && ruff format --check .
 ```
 
 測試大量倚賴 Mock LLM 與純函式，因此可離線、可重現地執行。CI（GitHub Actions）
-每次 push 都會跑 lint 與 [gitleaks](.github/workflows/secret-scan.yml) 金鑰掃描。
+每次 push 都會跑 lint、測試與 [gitleaks](.github/workflows/secret-scan.yml) 金鑰掃描。
 
 ## 安全性與隱私
 

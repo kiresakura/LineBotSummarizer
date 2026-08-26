@@ -130,35 +130,33 @@ async def safe_get(
     """
     request_headers = headers or {}
     current = url
-    async with _OUTBOUND:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            for _ in range(max_redirects + 1):
-                await _ensure_safe(current)
-                async with client.stream(
-                    "GET", current, headers=request_headers
-                ) as resp:
-                    if resp.status_code in _REDIRECT_CODES:
-                        loc = resp.headers.get("location")
-                        if not loc:
-                            raise UnsafeURLError("收到重導但缺少 Location")
-                        current = str(httpx.URL(current).join(loc))
-                        continue
+    async with (
+        _OUTBOUND,
+        httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client,
+    ):
+        for _ in range(max_redirects + 1):
+            await _ensure_safe(current)
+            async with client.stream("GET", current, headers=request_headers) as resp:
+                if resp.status_code in _REDIRECT_CODES:
+                    loc = resp.headers.get("location")
+                    if not loc:
+                        raise UnsafeURLError("收到重導但缺少 Location")
+                    current = str(httpx.URL(current).join(loc))
+                    continue
 
-                    resp.raise_for_status()
+                resp.raise_for_status()
 
-                    cl = resp.headers.get("content-length")
-                    if cl and cl.isdigit() and int(cl) > max_bytes:
-                        raise UnsafeURLError(
-                            f"回應過大: {cl} bytes（上限 {max_bytes}）"
-                        )
+                cl = resp.headers.get("content-length")
+                if cl and cl.isdigit() and int(cl) > max_bytes:
+                    raise UnsafeURLError(f"回應過大: {cl} bytes（上限 {max_bytes}）")
 
-                    buf = bytearray()
-                    async for chunk in resp.aiter_bytes():
-                        buf.extend(chunk)
-                        if len(buf) > max_bytes:
-                            raise UnsafeURLError(f"回應超過大小上限 {max_bytes} bytes")
-                    return SafeResponse(
-                        str(resp.url), resp.status_code, resp.headers, bytes(buf)
-                    )
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > max_bytes:
+                        raise UnsafeURLError(f"回應超過大小上限 {max_bytes} bytes")
+                return SafeResponse(
+                    str(resp.url), resp.status_code, resp.headers, bytes(buf)
+                )
 
     raise UnsafeURLError("重導次數過多")

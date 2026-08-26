@@ -10,7 +10,7 @@ enrich → classify → write flow end-to-end without LINE/Notion/OpenRouter key
 import argparse
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from lorekeeper import __version__
 from lorekeeper.adapters.markdown_sink import MarkdownSink
@@ -28,7 +28,7 @@ _SAMPLE = [
         sender_name="Alice",
         type=MessageType.TEXT,
         text="剛看到一篇講 ports & adapters 的好文，重點是讓核心邏輯不依賴框架。",
-        timestamp=datetime(2026, 1, 1, 9, 0, 0),
+        timestamp=datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC),
     ),
     InboundMessage(
         id="m2",
@@ -37,7 +37,7 @@ _SAMPLE = [
         sender_name="Bob",
         type=MessageType.TEXT,
         text="對，這樣換 Notion → Markdown 之類的就只是換 adapter，核心不用動。",
-        timestamp=datetime(2026, 1, 1, 9, 1, 0),
+        timestamp=datetime(2026, 1, 1, 9, 1, 0, tzinfo=UTC),
     ),
 ]
 

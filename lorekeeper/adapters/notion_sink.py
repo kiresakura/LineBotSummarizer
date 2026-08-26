@@ -80,7 +80,7 @@ class NotionSink:
                 )
                 logger.info(f"Notion 寫入成功: {page['id']}")
                 return
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 if "429" in str(e) or "rate_limited" in str(e):
                     wait = 2**attempt
                     logger.warning(f"Notion 限流，等待 {wait}s 後重試...")

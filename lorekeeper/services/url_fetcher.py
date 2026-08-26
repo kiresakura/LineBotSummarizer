@@ -41,8 +41,8 @@ async def fetch_url_content(url: str) -> UrlContent | None:
             logger.info(f"yt-dlp 未能處理，退回網頁爬取: {url}")
 
         return await _fetch_webpage(url)
-    except Exception as e:
-        logger.error(f"URL 爬取失敗 {url}: {e}")
+    except Exception:
+        logger.exception(f"URL 爬取失敗 {url}")
         return None
 
 
@@ -70,7 +70,7 @@ async def _fetch_video(url: str) -> UrlContent | None:
         loop = asyncio.get_event_loop()
         info = await loop.run_in_executor(None, extract)
     except Exception as e:
-        logger.warning(f"yt-dlp 提取失敗 {url}: {e}")
+        logger.warning(f"yt-dlp 提取失敗 {url}: {e}", exc_info=True)
         return None
 
     if not info:
@@ -168,7 +168,7 @@ async def _download_subtitle(url: str) -> str:
             line = line.strip()
             if not line:
                 continue
-            if line.startswith("WEBVTT") or line.startswith("NOTE"):
+            if line.startswith(("WEBVTT", "NOTE")):
                 continue
             if "-->" in line:
                 continue
@@ -183,7 +183,7 @@ async def _download_subtitle(url: str) -> str:
         logger.warning(f"字幕 URL 被安全檢查拒絕: {e}")
         return ""
     except Exception as e:
-        logger.debug(f"字幕下載失敗: {e}")
+        logger.debug(f"字幕下載失敗: {e}", exc_info=True)
         return ""
 
 

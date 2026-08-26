@@ -1,6 +1,6 @@
 """Classifier — JSON handling and entry construction, driven by fake providers."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from lorekeeper.adapters.mock_llm import MockLLMProvider
 from lorekeeper.models import Importance, InboundMessage, MessageType
@@ -14,7 +14,7 @@ def _msg(text: str) -> InboundMessage:
         sender_id="u",
         type=MessageType.TEXT,
         text=text,
-        timestamp=datetime(2026, 1, 1, 9, 0),
+        timestamp=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
     )
 
 

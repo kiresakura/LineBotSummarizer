@@ -8,7 +8,7 @@ drop-in compatible with Obsidian / any Markdown knowledge base.
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lorekeeper.models import KnowledgeEntry
@@ -36,7 +36,7 @@ class MarkdownSink:
         ts = (
             entry.source_messages[0].timestamp
             if entry.source_messages
-            else datetime.now()
+            else datetime.now(UTC)
         )
         slug = re.sub(r"[^\w\-]+", "-", entry.title or "entry").strip("-")[:50]
         return self.output_dir / f"{ts:%Y%m%d-%H%M%S}-{slug or 'entry'}.md"

@@ -8,8 +8,9 @@ makes sources/sinks/LLMs swappable from config.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import Awaitable, Callable, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from lorekeeper.models import InboundMessage, KnowledgeEntry, MediaPayload
 
